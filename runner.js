@@ -8,7 +8,7 @@ import { closeBrowser } from './lib/browser.js';
 import { runS4WorkerUpload } from './scripts/s4-worker-upload.js';
 import { runS4RoleAssignment } from './scripts/s4-role-assignment.js';
 import { runIasCreateUsers } from './scripts/ias-create-users.js';
-import { runCbcAssignUsers } from './scripts/cbc-assign-users.js';
+
 
 const args = process.argv.slice(2);
 const MODE = args.includes("--once") ? "once" : "poll";
@@ -18,14 +18,13 @@ const STEP_HANDLERS = {
   s4_worker_upload: runS4WorkerUpload,
   s4_role_upload: runS4RoleAssignment,
   ias_create: runIasCreateUsers,
-  // cbc_assign: runCbcAssignUsers,  // CBC requires browser automation — enable when ready
 };
 
-// Full provisioning creates 3 steps (CBC is handled via IAS group assignment)
+// Full provisioning creates 3 steps
 const FULL_STEPS = [
   { order: 1, type: "s4_worker_upload" },
   { order: 2, type: "s4_role_upload" },
-  { order: 3, type: "ias_create" },  // also handles IAS group assignment (replaces CBC)
+  { order: 3, type: "ias_create" },
 ];
 
 async function executeJob(jobId) {
