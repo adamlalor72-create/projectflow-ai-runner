@@ -15,6 +15,5 @@ applications:
       CF_RUNNER: "true"
       HEADLESS: "true"
       DISPLAY: ":99"
-      # Set these via: cf set-env dealflow-ai-runner DEALFLOW_RUNNER_KEY <your-key>
-      # DEALFLOW_RUNNER_KEY: set-via-cf-set-env
-      # ANTHROPIC_API_KEY: set-via-cf-set-env
+      # Set via: cf set-env dealflow-ai-runner DEALFLOW_RUNNER_KEY <your-key>
+      # The Anthropic API key lives on dealflow-ai-api — runner fetches it at runtime.
