@@ -1,0 +1,15 @@
+{
+  "name": "dealflow-ai-runner",
+  "version": "1.0.0",
+  "description": "Playwright-based provisioning runner for DealFlow AI",
+  "type": "module",
+  "scripts": {
+    "start": "node runner.js",
+    "poll": "node runner.js --poll",
+    "once": "node runner.js --once",
+    "test-s4": "node scripts/s4-worker-upload.js --test"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}
