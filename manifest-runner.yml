@@ -1,0 +1,20 @@
+---
+applications:
+  - name: dealflow-ai-runner
+    memory: 1G
+    disk_quota: 2G
+    instances: 1
+    buildpacks:
+      - https://github.com/cloudfoundry/apt-buildpack
+      - nodejs_buildpack
+    command: bash start-cf.sh
+    health-check-type: process
+    no-route: true
+    env:
+      NODE_ENV: production
+      CF_RUNNER: "true"
+      HEADLESS: "true"
+      DISPLAY: ":99"
+      # Set these via: cf set-env dealflow-ai-runner DEALFLOW_RUNNER_KEY <your-key>
+      # DEALFLOW_RUNNER_KEY: set-via-cf-set-env
+      # ANTHROPIC_API_KEY: set-via-cf-set-env
