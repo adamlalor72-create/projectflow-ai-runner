@@ -2,8 +2,8 @@
 applications:
   - name: dealflow-ai-runner
     path: .
-    memory: 512M
-    disk_quota: 1G
+    memory: 1G
+    disk_quota: 2G
     instances: 1
     no-route: true
     health-check-type: process
