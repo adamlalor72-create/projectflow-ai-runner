@@ -2,7 +2,7 @@
 applications:
   - name: dealflow-ai-runner
     path: .
-    memory: 1G
+    memory: 2G
     disk_quota: 2G
     instances: 1
     no-route: true
