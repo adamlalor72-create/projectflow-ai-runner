@@ -165,27 +165,69 @@ async function stepAssignDeploymentTarget(page, creds) {
   await page.waitForTimeout(2000);
 
   // Select first checkbox in the deployment target dialog
-  // From recording: getByRole('row', {...}).getByRole('checkbox')
-  // Simplified: click the first checkbox in any open dialog
   await withAIFallback(page, async () => {
+    // Try clicking the row first (triggers selection), then the checkbox
     const checked = await page.evaluate(() => {
       const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
       const dlg = dlgs[dlgs.length - 1];
       if (!dlg) return false;
+      // Strategy 1: Click the row itself (some UI5 tables select on row click)
+      const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
+      if (row) { row.click(); }
+      // Strategy 2: Find and click checkbox
       const cb = dlg.querySelector('ui5-checkbox, [role="checkbox"]');
       if (cb) { cb.click(); return true; }
-      const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
-      if (row) { row.click(); return true; }
-      return false;
+      return !!row;
     });
     if (!checked) throw new Error('No checkbox found');
-    console.log('[CBC] Selected deployment target');
+    console.log('[CBC] Clicked deployment target row/checkbox');
   }, 'Select the first deployment target checkbox.', { credentials: creds });
-  await page.waitForTimeout(1000);
 
-  // Click Assign Emphasized — from recording: getByRole('button', { name: 'Assign Emphasized' })
-  await page.getByRole('button', { name: 'Assign Emphasized' }).click({ timeout: 5000 });
-  console.log('[CBC] Confirmed assignment');
+  // Wait for the Assign button to become enabled
+  await page.waitForTimeout(2000);
+  // Verify button is enabled before clicking
+  const assignBtn = page.getByRole('button', { name: 'Assign Emphasized' });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const disabled = await assignBtn.getAttribute('disabled').catch(() => null);
+    if (!disabled) break;
+    console.log(`[CBC] Assign button still disabled, retrying selection (${attempt + 1}/5)...`);
+    // Re-click the checkbox/row
+    await page.evaluate(() => {
+      const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
+      const dlg = dlgs[dlgs.length - 1];
+      if (!dlg) return;
+      const cb = dlg.querySelector('ui5-checkbox, [role="checkbox"]');
+      if (cb) cb.click();
+      const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
+      if (row) row.click();
+    }).catch(() => {});
+    await page.waitForTimeout(1500);
+  }
+
+  // Click Assign Emphasized — force click if still disabled
+  await withAIFallback(page, async () => {
+    try {
+      await page.getByRole('button', { name: 'Assign Emphasized' }).click({ timeout: 5000 });
+    } catch {
+      // Force click via evaluate if Playwright refuses
+      const clicked = await page.evaluate(() => {
+        const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
+        const dlg = dlgs[dlgs.length - 1];
+        if (!dlg) return false;
+        const btns = dlg.querySelectorAll('ui5-button');
+        for (const b of btns) {
+          if (b.getAttribute('design') === 'Emphasized' || (b.textContent || '').trim() === 'Assign') {
+            b.removeAttribute('disabled');
+            b.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      if (!clicked) throw new Error('Assign Emphasized not found');
+    }
+    console.log('[CBC] Confirmed assignment');
+  }, 'Click "Assign" to confirm.', { credentials: creds });
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
   await screenshot(page, 'cbc-deployment-target-assigned');
