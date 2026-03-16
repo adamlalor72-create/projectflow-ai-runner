@@ -176,43 +176,75 @@ async function stepCreateWorkspace(page, wsName, wsType, creds) {
   }, 'In the Workspaces dialog, click the "Create New" button (bottom-right).', { credentials: creds });
   await page.waitForTimeout(2000);
 
-  // 4. Fill workspace title
+  // 4. Fill workspace title — must target the NEW WORKSPACE dialog specifically (not the Workspaces dialog behind it)
+  await page.waitForTimeout(1500);
   await withAIFallback(page, async () => {
-    // Try multiple selectors for the title input in the new workspace dialog
-    const filled = await cbcFillInput(page, 'ui5-input[placeholder*="Title"], ui5-input[placeholder*="title"], ui5-dialog ui5-input', wsName, 'Workspace Title');
-    if (!filled) {
-      // Try generic input inside open dialog
-      const inputs = await page.$$('ui5-dialog[open] ui5-input, ui5-dialog ui5-input');
-      for (const inp of inputs) {
-        if (await inp.isVisible().catch(() => false)) {
-          await inp.click();
-          await page.keyboard.press('Meta+a');
-          await page.keyboard.type(wsName, { delay: 30 });
-          console.log(`[CBC] Filled title via dialog input: "${wsName}"`);
-          break;
-        }
-      }
+    // The New Workspace dialog has data-help-id="create-workspace-dialog" and initial-focus="title"
+    const filled = await page.evaluate((name) => {
+      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
+                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
+      if (!dlg) return false;
+      // Find the title input — it has id="title" or is the first input in this specific dialog
+      const titleInput = dlg.querySelector('#title') || dlg.querySelector('ui5-input');
+      if (!titleInput) return false;
+      // Focus and set value via shadow DOM native input
+      const inner = titleInput.shadowRoot?.querySelector('input') || titleInput;
+      inner.focus();
+      inner.value = name;
+      inner.dispatchEvent(new Event('input', { bubbles: true }));
+      inner.dispatchEvent(new Event('change', { bubbles: true }));
+      // Also set the UI5 property directly
+      if (typeof titleInput.setAttribute === 'function') titleInput.setAttribute('value', name);
+      return true;
+    }, wsName).catch(() => false);
+    if (filled) {
+      console.log(`[CBC] Filled title via create-workspace-dialog: "${wsName}"`);
+    } else {
+      throw new Error('Title input not found in New Workspace dialog');
     }
   }, `Type "${wsName}" into the Title input field in the New Workspace dialog.`, { credentials: creds });
   await page.waitForTimeout(500);
 
-  // 5. Select workspace type (Evaluation or Implementation)
+  // 5. Select workspace type — scoped to the New Workspace dialog
   await withAIFallback(page, async () => {
-    const sel = page.locator('ui5-select, ui5-dialog select, ui5-dialog ui5-select').first();
-    if (await sel.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sel.click();
-      await page.waitForTimeout(500);
-      await cbcClickText(page, wsType, 'ui5-option');
+    const selected = await page.evaluate((type) => {
+      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
+                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
+      if (!dlg) return false;
+      const sel = dlg.querySelector('ui5-select');
+      if (!sel) return false;
+      sel.click();
+      // Wait a tick for dropdown, then find option
+      setTimeout(() => {
+        const opts = document.querySelectorAll('ui5-option, ui5-static-area-item ui5-option');
+        for (const o of opts) {
+          if ((o.textContent || '').trim().includes(type)) { o.click(); return; }
+        }
+      }, 300);
+      return true;
+    }, wsType).catch(() => false);
+    if (selected) {
+      await page.waitForTimeout(800);
       console.log(`[CBC] Selected workspace type: ${wsType}`);
     }
   }, `Select "${wsType}" from the workspace type dropdown in the dialog.`, { credentials: creds });
   await page.waitForTimeout(500);
 
-  // 6. Click Create
+  // 6. Click Create — scoped to the New Workspace dialog
   await withAIFallback(page, async () => {
-    const clicked = await cbcClick(page, 'ui5-dialog[open] ui5-button[design="Emphasized"]', 'Create button') ||
-      await cbcClickText(page, 'Create', 'ui5-button');
-    if (!clicked) throw new Error('Create button not found');
+    const clicked = await page.evaluate(() => {
+      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
+                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
+      if (!dlg) return false;
+      const btns = dlg.querySelectorAll('ui5-button');
+      for (const b of btns) {
+        if ((b.textContent || '').trim() === 'Create' || b.getAttribute('design') === 'Emphasized') {
+          b.click(); return true;
+        }
+      }
+      return false;
+    }).catch(() => false);
+    if (!clicked) throw new Error('Create button not found in New Workspace dialog');
   }, 'Click the "Create" button to create the workspace.', { credentials: creds });
   await page.waitForTimeout(5000);
   await dismissDialogs(page);
