@@ -1,5 +1,5 @@
 // DealFlow AI Runner — IAS User Creation + Group Assignment via SCIM 2.0 API
-// Creates users, saves scim_id, assigns IAS groups, sends password reset.
+// Creates users, saves scim_id, assigns IAS groups. Password set to Initial1! during SCIM creation.
 
 import { updateProjectUser } from '../lib/api.js';
 
@@ -53,35 +53,7 @@ async function createUser(baseUrl, authHeader, user) {
   throw new Error(`SCIM create failed (${r.status}): ${body?.detail || body?.message || JSON.stringify(body).slice(0, 300)}`);
 }
 
-/**
- * Reset password to Initial1! via SCIM PATCH (initial status = must change on first login).
- */
-async function resetPassword(baseUrl, authHeader, scimUserId, email) {
-  try {
-    const r = await fetch(`${baseUrl}/scim/Users/${scimUserId}`, {
-      method: "PATCH",
-      headers: { "Authorization": authHeader, "Content-Type": SCIM_CONTENT },
-      body: JSON.stringify({
-        schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-        Operations: [{ op: "replace", value: {
-          password: "Initial1!",
-          "urn:ietf:params:scim:schemas:extension:sap:2.0:User": {
-            passwordDetails: { status: "initial" },
-            mailVerified: true,
-          },
-          active: true,
-        }}],
-      }),
-    });
-    if (r.ok || r.status === 204) { console.log(`[IAS] 🔑 Password set to Initial1! for ${email}`); return true; }
-    const body = await r.json().catch(() => ({}));
-    console.warn(`[IAS] Password reset failed for ${email}: ${r.status} ${body.detail || ""}`);
-    return false;
-  } catch (err) {
-    console.warn(`[IAS] Password reset error for ${email}: ${err.message}`);
-    return false;
-  }
-}
+
 
 /**
  * Add a user to an IAS group via SCIM PATCH.
@@ -144,7 +116,7 @@ export async function runIasCreateUsers({ job, step, users, connection, ias_grou
   console.log("[IAS] SCIM connectivity verified ✓");
 
   const results = [];
-  let created = 0, skipped = 0, failed = 0, resetsSent = 0, groupsAssigned = 0;
+  let created = 0, skipped = 0, failed = 0, groupsAssigned = 0;
 
   for (let i = 0; i < users.length; i++) {
     const u = users[i];
@@ -202,13 +174,6 @@ export async function runIasCreateUsers({ job, step, users, connection, ias_grou
         }
       }
 
-      // Password already set to Initial1! during SCIM creation — no reset needed
-      // resetPassword() is only useful for re-provisioning existing users
-      if (scimId && !wasCreated) {
-        const ok = await resetPassword(baseUrl, authHeader, scimId, u.email);
-        if (ok) resetsSent++;
-      }
-
       results.push({
         email: u.email,
         status: wasCreated ? "created" : "existing",
@@ -226,7 +191,7 @@ export async function runIasCreateUsers({ job, step, users, connection, ias_grou
 
   console.log(`\n[IAS] ════════════════════════════════════════`);
   console.log(`[IAS] ${created} created, ${skipped} skipped, ${failed} failed`);
-  console.log(`[IAS] ${resetsSent} passwords set (Initial1!), ${groupsAssigned} group assignments`);
+  console.log(`[IAS] ${groupsAssigned} group assignments`);
   console.log(`[IAS] ════════════════════════════════════════\n`);
 
   if (failed > 0 && created === 0 && skipped === 0) {
@@ -235,7 +200,7 @@ export async function runIasCreateUsers({ job, step, users, connection, ias_grou
 
   return {
     total_users: users.length, created, skipped, failed,
-    resets_sent: resetsSent, groups_assigned: groupsAssigned,
+    resets_sent: 0, groups_assigned: groupsAssigned,
     api_driven: true, results,
     timestamp: new Date().toISOString(),
   };

@@ -153,6 +153,7 @@ async function pollOnce() {
     console.log(`[Runner] Found ${jobs.length} queued job(s)`);
     for (const job of jobs) {
       await executeJob(job.id);
+      await closeBrowser(); // Fresh browser for each job — prevents stale context errors
     }
     return true;
   } catch (err) {
