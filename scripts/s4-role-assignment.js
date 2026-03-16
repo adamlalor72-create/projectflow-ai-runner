@@ -295,8 +295,8 @@ export async function runS4RoleAssignment({ job, step, users, roles, connection 
 
     // Step 9: Wait for S4 to process and show results
     console.log("[S4-Roles] Waiting for upload to process...");
-    await page.waitForTimeout(5000);
-    await waitForUI5Ready(page, 30000);
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+    await waitForUI5Ready(page, 20000);
     await screenshot(page, "s4-roles-result");
 
     // Step 10: Check result — look for the validation/result screen
@@ -342,7 +342,7 @@ export async function runS4RoleAssignment({ job, step, users, roles, connection 
       });
       if (clicked) { console.log("[S4-Roles] Clicked final Upload via UI5 registry."); return; }
 
-      // Strategy 2: Find the bottom-right Upload button by position
+      // Strategy 2: Find the bottom-right Upload button by position, scroll into view, force click
       const btns = await page.$$('button, [role="button"]');
       let bestBtn = null, bestY = 0;
       for (const b of btns) {
@@ -353,14 +353,23 @@ export async function runS4RoleAssignment({ job, step, users, roles, connection 
         }
       }
       if (bestBtn) {
-        await bestBtn.click();
-        console.log("[S4-Roles] Clicked final Upload via position (bottom-most).");
+        await bestBtn.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(500);
+        await bestBtn.click({ force: true });
+        console.log("[S4-Roles] Clicked final Upload via position (bottom-most, force+scroll).");
+        // Verify the click registered — wait for button to disappear or page to change
+        await page.waitForTimeout(2000);
+        const stillVisible = await bestBtn.isVisible().catch(() => false);
+        if (stillVisible) {
+          console.warn("[S4-Roles] Button still visible after click — retrying with JS click...");
+          await bestBtn.evaluate(el => el.click());
+        }
         return;
       }
       throw new Error("Could not find final Upload button");
     }, "The validation screen is showing with tabs (Valid/Invalid Business Users, Valid/Invalid Roles). Click the blue 'Upload' button in the bottom-right corner of the page to confirm and complete the role upload. Do NOT click Cancel.", { credentials: creds });
 
-    await page.waitForTimeout(5000);
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
     await waitForUI5Ready(page, 15000);
     await screenshot(page, "s4-roles-after-final-upload");
 

@@ -1,56 +1,45 @@
 // DealFlow AI Runner — Browser Manager
-// Manages Playwright browser lifecycle with AI Vision Agent fallback
-// When anything unexpected happens, the AI agent takes over
+// Uses launchPersistentContext so the browser remembers cert selections,
+// cookies, and SSO sessions between runs.
 
 import { chromium } from 'playwright';
-import { writeFile, mkdir } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import config from '../config.js';
 import { aiResolve, withAIFallback } from './ai-agent.js';
 
-let _browser = null;
+let _context = null;
+const USER_DATA_DIR = path.join(os.homedir(), ".projectflow-runner-profile");
 
 export async function launchBrowser() {
-  if (_browser) return _browser;
-  console.log("[Browser] Launching Chromium (headless:", config.browser.headless, ")...");
+  if (_context) return _context;
+  console.log("[Browser] Launching persistent Chromium (headless:", config.browser.headless, ")...");
+  console.log("[Browser] Profile dir:", USER_DATA_DIR);
 
-  const args = [];
-  const certSubject = config.browser.clientCertSubject;
-  if (certSubject) {
-    // Auto-select the SAP SSO client certificate without prompting.
-    // This is a local dev workaround — on BTP the runner uses username/password
-    // from SystemConnections and the cert dialog never appears.
-    args.push(`--auto-select-certificate-for-urls={"pattern":"*","filter":{"SUBJECT":{"CN":"${certSubject}"}}}`);
-    console.log("[Browser] Auto-selecting client cert subject:", certSubject);
-  }
-
-  _browser = await chromium.launch({
+  _context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: config.browser.headless,
     slowMo: config.browser.slowMo,
-    args,
+    viewport: { width: 1440, height: 900 },
+    ignoreHTTPSErrors: true,
   });
-  return _browser;
+  _context.setDefaultTimeout(config.browser.timeout);
+  return _context;
 }
 
 export async function closeBrowser() {
-  if (_browser) {
-    await _browser.close();
-    _browser = null;
+  if (_context) {
+    await _context.close();
+    _context = null;
     console.log("[Browser] Closed.");
   }
 }
 
 export async function newPage() {
-  const browser = await launchBrowser();
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    ignoreHTTPSErrors: true,
-  });
-  context.setDefaultTimeout(config.browser.timeout);
+  const context = await launchBrowser();
   return context.newPage();
 }
 
-// Take a screenshot and save to screenshots dir
 export async function screenshot(page, name) {
   try {
     await mkdir(config.browser.screenshotDir, { recursive: true });
@@ -65,65 +54,151 @@ export async function screenshot(page, name) {
   }
 }
 
-/**
- * Login to an SAP system with AI fallback.
- * First attempts standard login, then hands off to AI for anything unexpected
- * (certificate dialogs, cookie banners, MFA prompts, etc.)
- */
+// ---------------------------------------------------------------------------
+// SAP UI5 / Fiori Helpers
+// ---------------------------------------------------------------------------
+
+export async function waitForUI5Ready(page, timeoutMs = 20000) {
+  try {
+    await page.waitForFunction(() => {
+      const core = window.sap?.ui?.getCore?.();
+      if (!core) return false;
+      const busy = document.querySelector('.sapUiLocalBusyIndicator, .sapMBusyIndicator, [aria-busy="true"]');
+      if (busy && busy.offsetParent !== null) return false;
+      return true;
+    }, { timeout: timeoutMs });
+  } catch {
+    console.warn("[Browser] UI5 ready check timed out after", timeoutMs, "ms");
+  }
+}
+
+export async function clickUI5Button(page, label) {
+  const clicked = await page.evaluate((lbl) => {
+    const core = window.sap?.ui?.getCore?.();
+    if (!core) return false;
+    const elements = core.mElements || {};
+    for (const id in elements) {
+      const el = elements[id];
+      const meta = el.getMetadata?.()?.getName?.() || "";
+      if (!meta.includes("Button") && !meta.includes("MenuItem") && !meta.includes("Link")) continue;
+      const text = el.getText?.() || el.getTitle?.() || "";
+      if (text.trim() === lbl || text.trim().includes(lbl)) {
+        if (typeof el.firePress === "function") { el.firePress(); return true; }
+        const dom = el.getDomRef?.();
+        if (dom) { dom.click(); return true; }
+      }
+    }
+    return false;
+  }, label);
+
+  if (clicked) {
+    console.log(`[Browser] Clicked UI5 button: "${label}"`);
+    return;
+  }
+
+  const btn = page.locator(`button:has-text("${label}"), [role="button"]:has-text("${label}")`).first();
+  if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await btn.click({ timeout: 10000 });
+    console.log(`[Browser] Clicked button via DOM: "${label}"`);
+    return;
+  }
+
+  throw new Error(`UI5 button "${label}" not found`);
+}
+
+export async function getUI5FileInput(page) {
+  const inputId = await page.evaluate(() => {
+    const inputs = document.querySelectorAll('input[type="file"]');
+    for (const input of inputs) {
+      input.style.display = "block";
+      input.style.visibility = "visible";
+      input.style.opacity = "1";
+      input.style.width = "1px";
+      input.style.height = "1px";
+      input.removeAttribute("tabindex");
+      return input.id || null;
+    }
+    return null;
+  });
+  if (inputId) return page.locator(`#${inputId}`);
+  const fallback = page.locator('input[type="file"]').first();
+  if (await fallback.count() > 0) return fallback;
+  throw new Error("No file input found on page");
+}
+
+// ---------------------------------------------------------------------------
+// Login & Navigation
+// ---------------------------------------------------------------------------
+
 export async function loginToSystem(page, url, username, password) {
   console.log("[Browser] Navigating to", url);
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForTimeout(2000);
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(3000);
 
-  // Let AI handle the full login flow — it can deal with certs, cookies, forms, etc.
-  const isLoggedIn = () => page.$('#shell-header, [data-sap-ui-area="shell"], .sapUshellShellHead');
+  // Broad "logged in" detection — works for Fiori, CBC, and other SAP apps
+  const isLoggedIn = async () => {
+    return await page.$('#shell-header, [data-sap-ui-area="shell"], .sapUshellShellHead, nav, [role="navigation"], [class*="shell"], [class*="Shell"], [class*="project"], [class*="workspace"], [class*="launchpad"], [class*="cbc"]');
+  };
 
-  // Check if already logged in
   if (await isLoggedIn()) {
     console.log("[Browser] Already logged in.");
     return true;
   }
 
-  // Try standard login first
-  const emailField = await page.$('input[name="j_username"], input[name="email"], input[type="email"], #j_username');
-  if (emailField) {
-    console.log("[Browser] Found login form, entering credentials...");
-    await emailField.fill(username);
-    const submitBtn = await page.$('button[type="submit"], input[type="submit"]');
-    if (submitBtn) await submitBtn.click();
-    await page.waitForTimeout(1500);
-
-    const passField = await page.$('input[name="j_password"], input[name="password"], input[type="password"], #j_password');
-    if (passField) {
-      await passField.fill(password);
-      const loginBtn = await page.$('button[type="submit"], input[type="submit"]');
-      if (loginBtn) await loginBtn.click();
+  // Cert-only SSO: if no username, just wait for redirects
+  if (!username) {
+    console.log("[Browser] No credentials — waiting for cert SSO...");
+    for (let i = 0; i < 15; i++) {
+      await page.waitForTimeout(2000);
+      if (await isLoggedIn()) {
+        console.log("[Browser] SSO login successful.");
+        return true;
+      }
     }
-    await page.waitForTimeout(3000);
   }
 
-  // Check if we're in
+  // Try standard email/password login if credentials provided
+  if (username) {
+    const emailField = await page.$('input[name="j_username"], input[name="email"], input[type="email"], #j_username');
+    if (emailField) {
+      console.log("[Browser] Found login form, entering email...");
+      await emailField.fill(username);
+      const submitBtn = await page.$('button[type="submit"], input[type="submit"]');
+      if (submitBtn) await submitBtn.click();
+      await page.waitForTimeout(2000);
+
+      // After entering email, IAS may redirect to cert auth OR show password
+      if (password) {
+        const passField = await page.$('input[name="j_password"], input[name="password"], input[type="password"], #j_password');
+        if (passField) {
+          await passField.fill(password);
+          const loginBtn = await page.$('button[type="submit"], input[type="submit"]');
+          if (loginBtn) await loginBtn.click();
+        }
+      }
+      // Wait for SSO redirect to complete
+      await page.waitForTimeout(5000);
+    }
+  }
+
   if (await isLoggedIn()) {
     console.log("[Browser] Login successful.");
     return true;
   }
 
-  // Something unexpected — hand off to AI agent
-  console.log("[Browser] Login didn't complete as expected — engaging AI agent...");
+  // Hand off to AI agent for anything unexpected
+  console.log("[Browser] Login didn't complete — engaging AI agent...");
+  const credInfo = username
+    ? `Credentials: username="${username}"${password ? ", password provided" : ", no password (cert SSO)"}.`
+    : "This system uses certificate-based SSO — no username/password needed.";
   const resolved = await aiResolve(
     page,
-    `I need to log into the SAP system at ${url}. I need to get past any dialogs (certificate selection, cookie consent, terms acceptance, etc.) and reach the Fiori launchpad shell. The login credentials are username="${username}" and the password is provided. If you see a certificate selection dialog, pick the user certificate (not the machine certificate). If you see a Fiori shell header, the login is complete — respond with "done".`,
-    { maxAttempts: 8, credentials: { username, password } }
+    `I need to log into the SAP system at ${url}. Get past any dialogs (certificate selection, cookie consent, terms, redirects) and reach the application. ${credInfo} If you see the application loaded (a shell header, dashboard, navigation, or main content), respond "done".`,
+    { maxAttempts: 10, credentials: { username, password } }
   );
 
-  if (resolved) {
-    console.log("[Browser] AI agent completed login.");
-    return true;
-  }
-
-  // Final check
-  if (await isLoggedIn()) {
-    console.log("[Browser] Login successful (post-AI).");
+  if (resolved || await isLoggedIn()) {
+    console.log("[Browser] Login successful.");
     return true;
   }
 
@@ -131,28 +206,18 @@ export async function loginToSystem(page, url, username, password) {
   return false;
 }
 
-// Navigate to a specific Fiori app by hash
 export async function navigateToApp(page, baseUrl, appHash) {
   const url = baseUrl.replace(/\/$/, "") + "/ui#" + appHash;
   console.log("[Browser] Navigating to app:", appHash);
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(3000);
-  await waitForNotBusy(page);
+  await waitForUI5Ready(page);
 }
 
-// Wait for a Fiori busy indicator to disappear
 export async function waitForNotBusy(page, timeoutMs = 15000) {
-  try {
-    await page.waitForFunction(() => {
-      const busy = document.querySelector('.sapUiLocalBusyIndicator, .sapMBusyIndicator, [aria-busy="true"]');
-      return !busy || busy.offsetParent === null;
-    }, { timeout: timeoutMs });
-  } catch {
-    console.warn("[Browser] Busy indicator still showing after timeout");
-  }
+  return waitForUI5Ready(page, timeoutMs);
 }
 
-// Upload a file to a file input dialog
 export async function uploadFile(page, filePath) {
   const fileInput = await page.$('input[type="file"]');
   if (fileInput) {

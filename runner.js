@@ -8,6 +8,7 @@ import { closeBrowser } from './lib/browser.js';
 import { runS4WorkerUpload } from './scripts/s4-worker-upload.js';
 import { runS4RoleAssignment } from './scripts/s4-role-assignment.js';
 import { runIasCreateUsers } from './scripts/ias-create-users.js';
+import { runCBCWorkspaceCreate } from './scripts/cbc-workspace-create.js';
 
 
 const args = process.argv.slice(2);
@@ -18,6 +19,7 @@ const STEP_HANDLERS = {
   s4_worker_upload: runS4WorkerUpload,
   s4_role_upload: runS4RoleAssignment,
   ias_create: runIasCreateUsers,
+  cbc_workspace_create: runCBCWorkspaceCreate,
 };
 
 // Full provisioning creates 3 steps
@@ -98,6 +100,7 @@ async function executeJob(jobId) {
         roles,
         ias_groups,
         connection: connections[requiredSystem],
+        connections,
       });
 
       await updateStep(step.id, {

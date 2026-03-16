@@ -1,0 +1,772 @@
+[
+  {
+    "action": "click",
+    "target": "Scoping in Preparation",
+    "detail": {
+      "tag": "span",
+      "text": "Scoping in Preparation",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269449284
+  },
+  {
+    "action": "click",
+    "target": "Create New",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Create New",
+      "label": "",
+      "role": "",
+      "id": "confirm-switch-project-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269451924
+  },
+  {
+    "action": "click",
+    "target": "Create New",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Create New",
+      "label": "",
+      "role": "",
+      "id": "confirm-switch-project-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269451924
+  },
+  {
+    "action": "type",
+    "target": "title",
+    "value": "Title",
+    "detail": {
+      "tag": "ui5-input",
+      "text": "",
+      "label": "",
+      "role": "",
+      "id": "title",
+      "name": "",
+      "type": "Text"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269456059
+  },
+  {
+    "action": "click",
+    "target": "ImplementationEvaluation",
+    "detail": {
+      "tag": "ui5-select",
+      "text": "ImplementationEvaluation",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269457295
+  },
+  {
+    "action": "click",
+    "target": "Evaluation",
+    "detail": {
+      "tag": "ui5-option",
+      "text": "Evaluation",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269460201
+  },
+  {
+    "action": "type",
+    "target": "ui5-select",
+    "value": "STARTER",
+    "detail": {
+      "tag": "ui5-select",
+      "text": "ImplementationEvaluation",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269460703
+  },
+  {
+    "action": "click",
+    "target": "Create",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Create",
+      "label": "",
+      "role": "",
+      "id": "confirm-create-workspace-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269461421
+  },
+  {
+    "action": "click",
+    "target": "Create",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Create",
+      "label": "",
+      "role": "",
+      "id": "confirm-create-workspace-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html",
+    "ts": 1773269461421
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269469362
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269469362
+  },
+  {
+    "action": "click",
+    "target": "All",
+    "detail": {
+      "tag": "ui5-segmented-button-item",
+      "text": "All",
+      "label": "",
+      "role": "",
+      "id": "dt-show-all",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269525888
+  },
+  {
+    "action": "click",
+    "target": "Available",
+    "detail": {
+      "tag": "ui5-segmented-button-item",
+      "text": "Available",
+      "label": "",
+      "role": "",
+      "id": "dt-show-available",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269528197
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "cancel-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269539765
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "cancel-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269539765
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269546618
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269546619
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "cancel-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269559098
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "cancel-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269559099
+  },
+  {
+    "action": "click",
+    "target": "Open",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Open",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269560225
+  },
+  {
+    "action": "click",
+    "target": "Open",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Open",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/",
+    "ts": 1773269560225
+  },
+  {
+    "action": "click",
+    "target": "Selected Country/Region is required",
+    "detail": {
+      "tag": "ui5-multi-combobox",
+      "text": "",
+      "label": "Selected Country/Region is required",
+      "role": "",
+      "id": "CountriesModalFC-c40e91c1df0b48f1b62d9dd414a589fq",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269563825
+  },
+  {
+    "action": "click",
+    "target": "Selected Country/Region is required",
+    "detail": {
+      "tag": "ui5-multi-combobox",
+      "text": "",
+      "label": "Selected Country/Region is required",
+      "role": "",
+      "id": "CountriesModalFC-c40e91c1df0b48f1b62d9dd414a589fq",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269574461
+  },
+  {
+    "action": "type",
+    "target": "Selected Country/Region is required",
+    "value": "g",
+    "detail": {
+      "tag": "ui5-multi-combobox",
+      "text": "",
+      "label": "Selected Country/Region is required",
+      "role": "",
+      "id": "CountriesModalFC-c40e91c1df0b48f1b62d9dd414a589fq",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269576286
+  },
+  {
+    "action": "click",
+    "target": "SaveMore Countries/RegionsCancelImport Scope from JSON FileSelected Country/Regi",
+    "detail": {
+      "tag": "ui5-dialog",
+      "text": "SaveMore Countries/RegionsCancelImport Scope from JSON FileSelected Country/Regi",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269579274
+  },
+  {
+    "action": "type",
+    "target": "Selected Country/Region is required",
+    "value": "Ukraine",
+    "detail": {
+      "tag": "ui5-multi-combobox",
+      "text": "",
+      "label": "Selected Country/Region is required",
+      "role": "",
+      "id": "CountriesModalFC-c40e91c1df0b48f1b62d9dd414a589fq",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269580710
+  },
+  {
+    "action": "click",
+    "target": "ui5-mcb-item[]",
+    "detail": {
+      "tag": "ui5-mcb-item",
+      "text": "",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269582305
+  },
+  {
+    "action": "type",
+    "target": "Selected Country/Region is required",
+    "value": "",
+    "detail": {
+      "tag": "ui5-multi-combobox",
+      "text": "",
+      "label": "Selected Country/Region is required",
+      "role": "",
+      "id": "CountriesModalFC-c40e91c1df0b48f1b62d9dd414a589fq",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269582809
+  },
+  {
+    "action": "click",
+    "target": "Save",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Save",
+      "label": "",
+      "role": "",
+      "id": "confirmDialogBtn",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269583971
+  },
+  {
+    "action": "click",
+    "target": "Save",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Save",
+      "label": "",
+      "role": "",
+      "id": "confirmDialogBtn",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269583971
+  },
+  {
+    "action": "click",
+    "target": "Add",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Add",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269588427
+  },
+  {
+    "action": "click",
+    "target": "Add",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Add",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269588427
+  },
+  {
+    "action": "click",
+    "target": "Complete Activity",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Complete Activity",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269599872
+  },
+  {
+    "action": "click",
+    "target": "Complete Activity",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Complete Activity",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269599872
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "_r_an_-action-2",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269607566
+  },
+  {
+    "action": "click",
+    "target": "Cancel",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Cancel",
+      "label": "",
+      "role": "",
+      "id": "_r_an_-action-2",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269607566
+  },
+  {
+    "action": "click",
+    "target": "Add",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Add",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269609637
+  },
+  {
+    "action": "click",
+    "target": "Add",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Add",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269609637
+  },
+  {
+    "action": "click",
+    "target": "Confirm and Add Scenario",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Confirm and Add Scenario",
+      "label": "",
+      "role": "",
+      "id": "confirmAndAddBtn",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269612966
+  },
+  {
+    "action": "click",
+    "target": "Confirm and Add Scenario",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Confirm and Add Scenario",
+      "label": "",
+      "role": "",
+      "id": "confirmAndAddBtn",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269612966
+  },
+  {
+    "action": "click",
+    "target": "Complete Activity",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Complete Activity",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269623948
+  },
+  {
+    "action": "click",
+    "target": "Complete Activity",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Complete Activity",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269623948
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269626408
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269626408
+  },
+  {
+    "action": "click",
+    "target": "DT GLX Project 02",
+    "detail": {
+      "tag": "span",
+      "text": "DT GLX Project 02",
+      "label": "DT GLX Project 02",
+      "role": "",
+      "id": "",
+      "name": "",
+      "type": ""
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269629542
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "confirm-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269631192
+  },
+  {
+    "action": "click",
+    "target": "Assign",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Assign",
+      "label": "",
+      "role": "",
+      "id": "confirm-assign-deployment-target-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269631192
+  },
+  {
+    "action": "click",
+    "target": "Confirm",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Confirm",
+      "label": "",
+      "role": "",
+      "id": "confirm-scoping-confirmation-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269638917
+  },
+  {
+    "action": "click",
+    "target": "Confirm",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Confirm",
+      "label": "",
+      "role": "",
+      "id": "confirm-scoping-confirmation-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269638917
+  },
+  {
+    "action": "click",
+    "target": "Close",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Close",
+      "label": "",
+      "role": "",
+      "id": "cancel-milestone-progress-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269666705
+  },
+  {
+    "action": "click",
+    "target": "Close",
+    "detail": {
+      "tag": "ui5-button",
+      "text": "Close",
+      "label": "",
+      "role": "",
+      "id": "cancel-milestone-progress-dialog",
+      "name": "",
+      "type": "Button"
+    },
+    "url": "https://cbc-eu-rel-vlab-gen-084.rel-vlab-gen.cbc.eu.one.cloud.sap/sap/public/x4/bc/pe/index.html#/catalog",
+    "ts": 1773269666705
+  }
+]

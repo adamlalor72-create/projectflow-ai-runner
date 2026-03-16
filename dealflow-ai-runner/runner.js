@@ -1,45 +1,84 @@
 #!/usr/bin/env node
-// DealFlow AI Runner — Main orchestrator
-// Polls BTP for queued provisioning jobs and executes them via Playwright
+// ProjectFlow AI Runner — Main orchestrator
+// Polls BTP for queued provisioning jobs and playbook jobs, executes via Playwright
 
 import config from './config.js';
-import { fetchQueuedJobs, fetchJobDetail, updateJob, updateStep } from './lib/api.js';
+import { fetchQueuedJobs, fetchJobDetail, updateJob, updateStep,
+         fetchPlaybook, updatePlaybookStep, updatePlaybook as updatePlaybookAPI } from './lib/api.js';
 import { closeBrowser } from './lib/browser.js';
 import { runS4WorkerUpload } from './scripts/s4-worker-upload.js';
 import { runS4RoleAssignment } from './scripts/s4-role-assignment.js';
 import { runIasCreateUsers } from './scripts/ias-create-users.js';
-import { runCbcAssignUsers } from './scripts/cbc-assign-users.js';
+import { executePlaybook } from './scripts/playbook-executor.js';
 
 const args = process.argv.slice(2);
 const MODE = args.includes("--once") ? "once" : "poll";
 
-// Step type → script mapping
+// Step type -> script mapping (provisioning jobs)
 const STEP_HANDLERS = {
   s4_worker_upload: runS4WorkerUpload,
   s4_role_upload: runS4RoleAssignment,
   ias_create: runIasCreateUsers,
-  // cbc_assign: runCbcAssignUsers,  // CBC requires browser automation — enable when ready
 };
 
-// Full provisioning creates all 4 steps
 const FULL_STEPS = [
   { order: 1, type: "s4_worker_upload" },
   { order: 2, type: "s4_role_upload" },
   { order: 3, type: "ias_create" },
-  { order: 4, type: "cbc_assign" },
 ];
 
-async function executeJob(jobId) {
+// ── Playbook Job Execution ───────────────────────────────────
+async function executePlaybookJob(jobId, job) {
   console.log("\n══════════════════════════════════════════════════");
-  console.log(`[Runner] Executing job: ${jobId}`);
+  console.log(`[Runner] Executing PLAYBOOK job: ${jobId}`);
   console.log("══════════════════════════════════════════════════");
 
-  // Mark job as running
-  await updateJob(jobId, {
-    status: "running",
-    started_at: new Date().toISOString(),
-    progress: 0,
-  });
+  await updateJob(jobId, { status: "running", started_at: new Date().toISOString(), progress: 0 });
+
+  try {
+    // Extract playbook ID from job config
+    const jobConfig = typeof job.config === "string" ? JSON.parse(job.config) : (job.config || {});
+    const playbookId = jobConfig.playbook_id;
+    if (!playbookId) throw new Error("No playbook_id in job config");
+
+    // Fetch playbook with steps, connection, and source data
+    const { playbook, steps, connection, sourceData } = await fetchPlaybook(playbookId);
+    if (!connection) throw new Error(`No ${playbook.system_type} connection configured`);
+    if (!steps.length) throw new Error("Playbook has no steps");
+
+    console.log(`[Runner] Playbook: ${playbook.name} (${steps.length} steps)`);
+    console.log(`[Runner] System: ${playbook.system_type} | Data source: ${playbook.data_source || "none"}`);
+
+    await updateJob(jobId, { progress: 10 });
+
+    // Execute the playbook
+    const result = await executePlaybook({
+      playbook, steps, connection, sourceData,
+      updateStep: updatePlaybookStep,
+      updatePlaybook: updatePlaybookAPI,
+    });
+
+    await updateJob(jobId, {
+      status: result.failed_steps > 0 ? "failed" : "completed",
+      completed_at: new Date().toISOString(),
+      progress: 100,
+      error_message: result.failed_steps > 0 ? `${result.failed_steps}/${result.total_steps} steps failed` : null,
+    });
+
+    console.log(`[Runner] Playbook job ${jobId} ${result.failed_steps === 0 ? "COMPLETED" : "PARTIAL"}`);
+  } catch (err) {
+    console.error("[Runner] Playbook job failed:", err.message);
+    await updateJob(jobId, { status: "failed", completed_at: new Date().toISOString(), error_message: err.message });
+  }
+}
+
+// ── Provisioning Job Execution ───────────────────────────────
+async function executeProvisioningJob(jobId) {
+  console.log("\n══════════════════════════════════════════════════");
+  console.log(`[Runner] Executing PROVISIONING job: ${jobId}`);
+  console.log("══════════════════════════════════════════════════");
+
+  await updateJob(jobId, { status: "running", started_at: new Date().toISOString(), progress: 0 });
 
   let detail;
   try {
@@ -51,90 +90,49 @@ async function executeJob(jobId) {
   }
 
   const { job, steps, users, roles, connections } = detail;
-  console.log(`[Runner] Job type: ${job.job_type}, Users: ${users.length}, Steps: ${steps.length}`);
-  console.log(`[Runner] Connections: ${Object.keys(connections).join(", ") || "none"}`);
+  console.log(`[Runner] Users: ${users.length}, Steps: ${steps.length}`);
 
   if (users.length === 0) {
     await updateJob(jobId, { status: "failed", error_message: "No users to provision" });
     return;
   }
 
-  // Execute each step in order
   let failed = false;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const handler = STEP_HANDLERS[step.step_type];
 
     if (!handler) {
-      console.warn(`[Runner] No handler for step type: ${step.step_type}, skipping`);
+      console.warn(`[Runner] No handler for: ${step.step_type}, skipping`);
       await updateStep(step.id, { status: "skipped" });
       continue;
     }
 
-    // Check if the required system connection exists
-    const requiredSystem = step.step_type.startsWith("s4_") ? "s4"
-      : step.step_type.startsWith("ias_") ? "ias"
-      : step.step_type.startsWith("cbc_") ? "cbc" : null;
-
-    if (requiredSystem && !connections[requiredSystem]) {
-      console.warn(`[Runner] No ${requiredSystem} connection configured, skipping step`);
-      await updateStep(step.id, {
-        status: "skipped",
-        detail: JSON.stringify({ reason: `No ${requiredSystem} connection configured` }),
-      });
+    const sys = step.step_type.startsWith("s4_") ? "s4" : step.step_type.startsWith("ias_") ? "ias" : null;
+    if (sys && !connections[sys]) {
+      await updateStep(step.id, { status: "skipped", detail: JSON.stringify({ reason: `No ${sys} connection` }) });
       continue;
     }
 
-    // Execute the step
     console.log(`\n── Step ${step.step_order}: ${step.step_type} ──`);
-    await updateStep(step.id, {
-      status: "running",
-      started_at: new Date().toISOString(),
-    });
+    await updateStep(step.id, { status: "running", started_at: new Date().toISOString() });
 
     try {
-      const result = await handler({
-        job,
-        step,
-        users,
-        roles,
-        connection: connections[requiredSystem],
-      });
-
-      await updateStep(step.id, {
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        detail: JSON.stringify(result || {}),
-      });
-      console.log(`[Runner] Step ${step.step_order} completed.`);
+      const result = await handler({ job, step, users, roles, connection: connections[sys] });
+      await updateStep(step.id, { status: "completed", completed_at: new Date().toISOString(), detail: JSON.stringify(result || {}) });
     } catch (err) {
-      console.error(`[Runner] Step ${step.step_order} failed:`, err.message);
-      await updateStep(step.id, {
-        status: "failed",
-        completed_at: new Date().toISOString(),
-        error_message: err.message,
-        detail: JSON.stringify({ error: err.message, stack: err.stack }),
-      });
+      console.error(`[Runner] Step failed:`, err.message);
+      await updateStep(step.id, { status: "failed", completed_at: new Date().toISOString(), error_message: err.message });
       failed = true;
-      // Don't break — continue to next step (they may be independent)
     }
 
-    // Update job progress
-    const progress = Math.round(((i + 1) / steps.length) * 100);
-    await updateJob(jobId, { progress });
+    await updateJob(jobId, { progress: Math.round(((i + 1) / steps.length) * 100) });
   }
 
-  // Mark job as completed or failed
-  await updateJob(jobId, {
-    status: failed ? "failed" : "completed",
-    completed_at: new Date().toISOString(),
-    progress: 100,
-    error_message: failed ? "One or more steps failed — check step details" : null,
-  });
-
-  console.log(`\n[Runner] Job ${jobId} ${failed ? "FAILED" : "COMPLETED"}`);
+  await updateJob(jobId, { status: failed ? "failed" : "completed", completed_at: new Date().toISOString(), progress: 100, error_message: failed ? "One or more steps failed" : null });
 }
 
+// ── Main Loop ────────────────────────────────────────────────
 async function pollOnce() {
   try {
     const jobs = await fetchQueuedJobs();
@@ -142,7 +140,11 @@ async function pollOnce() {
 
     console.log(`[Runner] Found ${jobs.length} queued job(s)`);
     for (const job of jobs) {
-      await executeJob(job.id);
+      if (job.job_type === "playbook") {
+        await executePlaybookJob(job.id, job);
+      } else {
+        await executeProvisioningJob(job.id);
+      }
     }
     return true;
   } catch (err) {
@@ -152,13 +154,10 @@ async function pollOnce() {
 }
 
 async function main() {
-  console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║   DealFlow AI — Playwright Provisioning Runner  ║");
-  console.log("╚══════════════════════════════════════════════════╝");
-  console.log(`Mode: ${MODE}`);
-  console.log(`API: ${config.apiUrl}`);
-  console.log(`Headless: ${config.browser.headless}`);
-  console.log("");
+  console.log("╔══════════════════════════════════════════════════════╗");
+  console.log("║   ProjectFlow AI — Playwright Provisioning Runner   ║");
+  console.log("╚══════════════════════════════════════════════════════╝");
+  console.log(`Mode: ${MODE} | API: ${config.apiUrl} | Headless: ${config.browser.headless}\n`);
 
   if (MODE === "once") {
     const found = await pollOnce();
@@ -167,7 +166,6 @@ async function main() {
     process.exit(0);
   }
 
-  // Poll loop
   console.log(`[Runner] Polling every ${config.pollIntervalMs / 1000}s...`);
   while (true) {
     await pollOnce();
@@ -175,14 +173,5 @@ async function main() {
   }
 }
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("\n[Runner] Shutting down...");
-  await closeBrowser();
-  process.exit(0);
-});
-
-main().catch(err => {
-  console.error("[Runner] Fatal error:", err);
-  process.exit(1);
-});
+process.on("SIGINT", async () => { console.log("\n[Runner] Shutting down..."); await closeBrowser(); process.exit(0); });
+main().catch(err => { console.error("[Runner] Fatal error:", err); process.exit(1); });

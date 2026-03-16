@@ -202,8 +202,9 @@ export async function runIasCreateUsers({ job, step, users, connection, ias_grou
         }
       }
 
-      // Send password reset for newly created users
-      if (scimId && wasCreated) {
+      // Password already set to Initial1! during SCIM creation — no reset needed
+      // resetPassword() is only useful for re-provisioning existing users
+      if (scimId && !wasCreated) {
         const ok = await resetPassword(baseUrl, authHeader, scimId, u.email);
         if (ok) resetsSent++;
       }

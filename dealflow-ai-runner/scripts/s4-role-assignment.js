@@ -13,7 +13,7 @@ import { withAIFallback, tryLearnedStrategies } from '../lib/ai-agent.js';
 export async function runS4RoleAssignment({ job, step, users, roles, connection }) {
   const page = await newPage();
   let csvPath = null;
-  const creds = { username: connection.username, password: connection.password };
+  const creds = { username: connection.username || connection.user_name, password: connection.password };
 
   try {
     const usersWithRoles = users.filter(u => roles.some(r => r.project_user_id === u.id));
@@ -26,7 +26,7 @@ export async function runS4RoleAssignment({ job, step, users, roles, connection 
 
     // Step 1: Login
     console.log("[S4-Roles] Logging into S/4HANA...");
-    const loggedIn = await loginToSystem(page, baseUrl, connection.username, connection.password);
+    const loggedIn = await loginToSystem(page, baseUrl, connection.username || connection.user_name, connection.password);
     if (!loggedIn) throw new Error("Failed to login to S/4HANA");
 
     // Step 2: Navigate to Maintain Business Users

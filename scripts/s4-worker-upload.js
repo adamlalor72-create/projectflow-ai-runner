@@ -60,8 +60,20 @@ export async function runS4WorkerUpload({ job, step, users, connection }) {
 
     // Step 4: Select import type — Worker (submenu item)
     console.log("[S4-Worker] Selecting import option: Worker...");
+    // Wait for menu to fully render (SAP menus have render delay)
+    await page.waitForTimeout(2000);
     await withAIFallback(page, async () => {
-      // Strategy 1: Direct text click on menu item "Worker" (exact match)
+      // Strategy 1: Playwright locator with exact text match + wait
+      try {
+        const workerItem = page.locator('[role="menuitem"], [role="option"], li, .sapMSLI, .sapMLIB').filter({ hasText: /^Worker$/ }).first();
+        if (await workerItem.isVisible({ timeout: 3000 })) {
+          await workerItem.scrollIntoViewIfNeeded().catch(() => {});
+          await workerItem.click({ timeout: 5000 });
+          console.log("[S4-Worker] Clicked 'Worker' menu item via locator filter.");
+          return;
+        }
+      } catch {}
+      // Strategy 2: Direct text scan on menu items
       const items = await page.$$('[role="menuitem"], [role="option"], li, .sapMSLI, .sapMLIB');
       for (const item of items) {
         const text = (await item.textContent().catch(() => "")).trim();
@@ -213,8 +225,8 @@ export async function runS4WorkerUpload({ job, step, users, connection }) {
 
     // Step 9: Wait for completion
     console.log("[S4-Worker] Waiting for import to complete...");
-    await page.waitForTimeout(5000);
-    await waitForUI5Ready(page, 30000);
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+    await waitForUI5Ready(page, 20000);
     await screenshot(page, "s4-worker-after-import");
 
     // Step 10: Check result and dismiss dialog

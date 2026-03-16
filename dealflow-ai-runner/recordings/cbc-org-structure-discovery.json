@@ -1,0 +1,211 @@
+{
+  "cbc_org_structure_flow": {
+    "navigation": {
+      "from_project_page": "In the left sidebar under 'Activities', click 'Organizational Structure'. The sidebar item has data-automation-id='navigation-item-org' and data-action-name='goToOrgManagement'.",
+      "url_hash": "#/orgmanagement",
+      "activity_name": "Set Up Organizational Structure",
+      "sidebar_items_in_order": ["Overview", "Scope", "Primary Finance Settings", "Organizational Structure", "Configuration"],
+      "page_title": "Set Up Organizational Structure",
+      "page_status": "Open",
+      "page_description": "Define or enhance your organizational structure as per the business requirement.",
+      "status_badges": {
+        "units_to_create": {"text": "Units to Create", "id": "creationTaskOverview", "data_action_name": "openCreationOcrRulesPopover"},
+        "units_to_confirm": {"text": "Units to Confirm", "id": "confirmationTaskOverview", "data_action_name": "openConfirmationOcrRulesPopover"}
+      }
+    },
+    "views_available": [
+      {"name": "Graphic View", "data_help_id": "chart-view", "data_action_name": "switchToChartView", "tag": "ui5-segmented-button-item"},
+      {"name": "Table View", "data_help_id": "table-view", "data_action_name": "switchToTableView", "tag": "ui5-segmented-button-item"}
+    ],
+    "table_view_columns": ["ID", "Organization Unit Name", "Type", "Country/Region", "Total number of units below", "Confirmation Status"],
+    "simplified_toggle": {
+      "text": "Simplified",
+      "tag": "ui5-button",
+      "role": "checkbox",
+      "icon": "border",
+      "data_action_name": "toggleSimplifiedMode",
+      "data_help_id": "simplified"
+    },
+    "filter_bar": {
+      "search": {"tag": "ui5-input", "placeholder": "Search"},
+      "org_unit_type_filter": {"id": "orgTypes", "tag": "ui5-multi-combobox", "options": ["Distribution Channel", "Division", "Sales Office", "Shipping Point (Return)", "Shipping Point (Standard)", "Shipping Point (Customer Consignment)", "Purchasing Organization", "Company Code"]},
+      "country_region_filter": {"id": "country", "tag": "ui5-multi-combobox"},
+      "confirmation_status_filter": {"id": "confirmationStatus", "tag": "ui5-multi-combobox"}
+    },
+    "create_button_global": {
+      "text": "Create",
+      "id": "createGlobalOrgUnit",
+      "tag": "ui5-button",
+      "icon": "add",
+      "data_action_name": "createGlobalOrgUnit",
+      "data_help_id": "createGlobalEntity",
+      "dropdown_options": [
+        {"text": "Distribution Channel", "data_action_name": "openSidePanelForDCHCreation"},
+        {"text": "Division", "data_action_name": "openSidePanelForDIVCreation"},
+        {"text": "Sales Office", "data_action_name": "openSidePanelForSOFCreation"},
+        {"text": "Shipping Point", "data_action_name": "openSidePanelForSPT_GCreation"},
+        {"text": "Purchasing Organization", "data_action_name": "openSidePanelForPORCreation"},
+        {"text": "Company Code", "data_action_name": "openSidePanelForCCDCreation"}
+      ]
+    },
+    "common_form_element_ids": {
+      "note": "All creation dialogs reuse the same element IDs. Side panel dynamically changes content based on org unit type.",
+      "id_field": "entity-id",
+      "name_field": "entity-name",
+      "city_field": "entity-city",
+      "country_region_field": "country-region",
+      "sub_type_field": "sub-type",
+      "company_code_select": "company-code",
+      "select_company": "select-company",
+      "distribution_channel_select": "distributionChannel",
+      "division_select": "division",
+      "sales_org_id_field": "sales-org"
+    },
+    "org_unit_types": [
+      {
+        "type": "Company Code",
+        "create_action_name": "openSidePanelForCCDCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 25)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 25},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true},
+          {"label": "Default Company Code", "type": "checkbox", "required": false},
+          {"label": "Select Company", "element_id": "select-company", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Top-level"
+      },
+      {
+        "type": "Plant",
+        "create_method": "inline_link",
+        "inline_link_text": "Create Plant",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 30)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 30},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Company Code (implicit via inline link position)"
+      },
+      {
+        "type": "Storage Location",
+        "create_method": "inline_link",
+        "inline_link_text": "Create Storage Location",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 16)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 16},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Subtype", "element_id": "sub-type", "type": "select", "required": true,
+           "options": ["STL_STD_A", "STL_STD_B", "STL_RAW_MATNR", "STL_KANBAN", "STL_RESIDUAL", "STL_HU_MANAGED", "STL_MAIN_TANK", "STL_RET", "STL_DAY_TANK"]},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Plant (implicit via inline link position)"
+      },
+      {
+        "type": "Sales Organization",
+        "create_method": "inline_link",
+        "inline_link_text": "Create Sales Organization",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Company Code (implicit via inline link position)"
+      },
+      {
+        "type": "Distribution Channel",
+        "create_action_name": "openSidePanelForDCHCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20}
+        ],
+        "parent_assignment": "Top-level. Links to Sales Org via Sales Area."
+      },
+      {
+        "type": "Division",
+        "create_action_name": "openSidePanelForDIVCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20}
+        ],
+        "parent_assignment": "Top-level. Links to Sales Org via Sales Area."
+      },
+      {
+        "type": "Sales Area",
+        "create_method": "inline_link",
+        "inline_link_text": "Create Sales Area",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": false, "note": "Auto-generated from SalesOrg|DCH|DIV, field is disabled"},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20},
+          {"label": "Sales Organization ID", "element_id": "sales-org", "type": "input", "required": false, "note": "Read-only, auto-populated"},
+          {"label": "Distribution Channel", "element_id": "distributionChannel", "type": "select", "required": true},
+          {"label": "Division", "element_id": "division", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Sales Organization (implicit via inline link position)"
+      },
+      {
+        "type": "Sales Office",
+        "create_action_name": "openSidePanelForSOFCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Top-level"
+      },
+      {
+        "type": "Sales Group",
+        "create_method": "inline_link",
+        "inline_link_text": "Create Sales Group",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20}
+        ],
+        "parent_assignment": "Sales Office (implicit via inline link position)"
+      },
+      {
+        "type": "Purchasing Organization",
+        "create_action_name": "openSidePanelForPORCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 20)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 20},
+          {"label": "Company Code", "element_id": "company-code", "type": "select", "required": false}
+        ],
+        "parent_assignment": "Optional Company Code assignment via dropdown"
+      },
+      {
+        "type": "Shipping Point",
+        "create_action_name": "openSidePanelForSPT_GCreation",
+        "fields": [
+          {"label": "ID", "element_id": "entity-id", "type": "input", "required": true},
+          {"label": "Name (Max 30)", "element_id": "entity-name", "type": "input", "required": true, "max_length": 30},
+          {"label": "City", "element_id": "entity-city", "type": "input", "required": true},
+          {"label": "Subtype", "element_id": "sub-type", "type": "select", "required": true,
+           "options": ["SPT_STD", "SPT_RAW_MATNR", "SPT_CUST_CONSMT"]},
+          {"label": "Country/Region", "element_id": "country-region", "type": "select", "required": true}
+        ],
+        "parent_assignment": "Top-level"
+      }
+    ],
+    "assignment_flow": [
+      {"child": "Plant", "parent": "Company Code", "how": "Implicit — click '+ Create Plant' under a Company Code node"},
+      {"child": "Storage Location", "parent": "Plant", "how": "Implicit — click '+ Create Storage Location' under a Plant node"},
+      {"child": "Sales Organization", "parent": "Company Code", "how": "Implicit — click '+ Create Sales Organization' under a Company Code node"},
+      {"child": "Sales Area", "parent": "Sales Organization", "how": "Implicit — click '+ Create Sales Area' under a Sales Org. Pick DCH + DIV from dropdowns."},
+      {"child": "Distribution Channel", "parent": "Sales Org (via Sales Area)", "how": "DCH is top-level. Connected to Sales Org through Sales Area creation."},
+      {"child": "Division", "parent": "Sales Org (via Sales Area)", "how": "DIV is top-level. Connected to Sales Org through Sales Area creation."},
+      {"child": "Sales Group", "parent": "Sales Office", "how": "Implicit — click '+ Create Sales Group' under a Sales Office node"},
+      {"child": "Purchasing Org", "parent": "Company Code (optional)", "how": "Explicit dropdown in creation dialog"},
+      {"child": "Shipping Point", "parent": "None", "how": "Top-level. Plant assignment not done in org structure editor."}
+    ],
+    "complete_activity": {
+      "button_text": "Complete Activity",
+      "button_design": "Emphasized",
+      "data_action_name": "completeOrgActivity",
+      "confirm_button": {"text": "Confirm", "data_action_name": "confirmOrgUnit", "data_help_id": "confirmButton"},
+      "close_button": {"text": "Close", "data_action_name": "closeOrgActivity", "data_help_id": "backToActivityList"}
+    }
+  }
+}

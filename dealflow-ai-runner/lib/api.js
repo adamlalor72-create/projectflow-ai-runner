@@ -35,36 +35,20 @@ export async function fetchJobDetail(jobId) {
   return r.json();
 }
 
-async function apiPatchWithRetry(url, data, label) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) {
-      console.warn(`[API] Retrying ${label} (attempt ${attempt + 1}/3)...`);
-      await new Promise(r => setTimeout(r, 2000 * attempt));
-    }
-    const r = await apiFetch(url, { method: "PATCH", body: JSON.stringify(data) });
-    if (r.ok) return;
-    const body = await r.text().catch(() => "");
-    console.error(`[API] ${label} failed (${r.status}): ${body.slice(0, 200)}`);
-    if (r.status >= 400 && r.status < 500 && r.status !== 408) break; // Don't retry client errors
-  }
-  console.error(`[API] ${label} failed after retries — status may be out of sync`);
-}
-
 export async function updateJob(jobId, data) {
-  await apiPatchWithRetry("/api/runner/job/" + jobId, data, `updateJob(${jobId.slice(0,8)})`);
-}
-
-export async function updateStep(stepId, data) {
-  await apiPatchWithRetry("/api/runner/step/" + stepId, data, `updateStep(${stepId.slice(0,8)})`);
-}
-
-export async function updateProjectUser(userId, data) {
-  const r = await apiFetch("/api/runner/project-user/" + userId, {
+  const r = await apiFetch("/api/runner/job/" + jobId, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
-  if (!r.ok) console.error("[API] Failed to update project user:", r.status);
-  return r.ok;
+  if (!r.ok) console.error("[API] Failed to update job:", r.status);
+}
+
+export async function updateStep(stepId, data) {
+  const r = await apiFetch("/api/runner/step/" + stepId, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) console.error("[API] Failed to update step:", r.status);
 }
 
 // Fetch Anthropic API key from BTP AI Settings
@@ -79,8 +63,6 @@ export async function fetchAIConfig() {
 
 // Generate CSV content from user data (used by scripts)
 export function generateWorkerCSV(users, includeCompanyCode = true) {
-  // includeCompanyCode=true  → "Worker and Work Agreement" import template (15 cols)
-  // includeCompanyCode=false → simple "Worker" import template (13 cols)
   let h = "*WorkerID,UserName,*WorkerType (BUP003[Employee]/BBP005[Contingent Worker]),Is Contingent Worker of[*for BBP005],*FirstName,*LastName,FullName,Email,PhoneNumber,MobilePhoneNumber,Language";
   if (includeCompanyCode) h += ",*CompanyCode,CostCenter";
   h += ",*StartDate(YYYYMMDD),*EndDate(YYYYMMDD)";
@@ -92,33 +74,48 @@ export function generateWorkerCSV(users, includeCompanyCode = true) {
       u.first_name, u.last_name,
       u.full_name || (u.first_name + " " + u.last_name),
       u.email || "", u.phone || "", u.mobile || "",
-      u.language || "EN",
+      u.language || "EN"
     ];
     if (includeCompanyCode) fields.push(u.company_code || "", u.cost_center || "");
     fields.push(u.start_date || "20250101", u.end_date || "99991231");
     return fields.join(",");
   });
 
-  return h + "\r\n" + rows.join("\r\n");
+  return h + "\n" + rows.join("\n");
 }
 
 export function generateRoleCSV(users, roles) {
-  // BOM required to match SAP template exactly — S/4 expects UTF-8 with BOM
-  const BOM = "\uFEFF";
   const h = "User Name;User ID (Optional);E-Mail;Global User ID;Business Role ID";
   const rows = [];
   users.forEach(u => {
     const userRoles = roles.filter(r => r.project_user_id === u.id);
     userRoles.forEach(r => {
-      rows.push([u.user_name || u.worker_id, "", u.email || "", "", r.role_id].join(";"));
+      rows.push([u.user_name || u.worker_id, "", "", "", r.role_id].join(";"));
     });
   });
-  // Diagnostic logging
-  console.log(`[CSV] generateRoleCSV: ${users.length} users, ${roles.length} roles → ${rows.length} data rows`);
-  if (rows.length === 0 && roles.length > 0) {
-    console.warn("[CSV] WARNING: roles exist but no rows generated — possible ID mismatch");
-    console.warn("[CSV] User IDs:", users.slice(0, 3).map(u => u.id));
-    console.warn("[CSV] Role project_user_ids:", roles.slice(0, 3).map(r => r.project_user_id));
-  }
-  return BOM + h + "\r\n" + rows.join("\r\n");
+  return h + "\n" + rows.join("\n");
+}
+
+// ── Playbook API ─────────────────────────────────────────────
+
+export async function fetchPlaybook(playbookId) {
+  const r = await apiFetch("/api/runner/playbook/" + playbookId);
+  if (!r.ok) throw new Error("Failed to fetch playbook: " + r.status);
+  return r.json();
+}
+
+export async function updatePlaybookStep(stepId, data) {
+  const r = await apiFetch("/api/runner/playbook-step/" + stepId, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) console.error("[API] Failed to update playbook step:", r.status);
+}
+
+export async function updatePlaybook(playbookId, data) {
+  const r = await apiFetch("/api/runner/playbook/" + playbookId, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) console.error("[API] Failed to update playbook:", r.status);
 }

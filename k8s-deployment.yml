@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dealflow-ai-runner
+  namespace: default
+  labels:
+    app: dealflow-ai-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dealflow-ai-runner
+  template:
+    metadata:
+      labels:
+        app: dealflow-ai-runner
+    spec:
+      containers:
+        - name: runner
+          image: adamlalor72/dealflow-ai-runner:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: HEADLESS
+              value: "true"
+            - name: CF_RUNNER
+              value: "true"
+            - name: DEALFLOW_RUNNER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dealflow-runner-secret
+                  key: runner-api-key
+          # Chromium needs /dev/shm to be larger than default 64MB
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+      restartPolicy: Always
