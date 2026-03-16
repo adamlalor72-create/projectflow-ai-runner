@@ -282,29 +282,41 @@ async function stepCreateWorkspace(page, wsName, wsType, creds) {
 async function stepAssignDeploymentTarget(page, creds) {
   console.log('[CBC] ── Assigning Deployment Target ──');
 
-  // Click "Assign" next to "Assign Deployment Target" — use evaluate to bypass stacked dialogs
+  // Wait for Overview page to fully load after workspace creation
+  await page.waitForTimeout(5000);
+  await screenshot(page, 'cbc-overview-before-assign');
+
+  // Click "Assign" button — broaden search to handle different page layouts
   await withAIFallback(page, async () => {
     const clicked = await page.evaluate(() => {
-      // Find all buttons with text "Assign" and click the one near "Deployment Target"
-      const btns = document.querySelectorAll('ui5-button, button, [role="button"]');
+      // Strategy 1: Find button with text "Assign" near "Deployment Target"
+      const btns = document.querySelectorAll('ui5-button, button, [role="button"], a');
       for (const btn of btns) {
         const txt = (btn.textContent || '').trim();
         if (txt === 'Assign') {
-          const row = btn.closest('ui5-li, li, tr, [role="row"], div') || btn.parentElement;
-          const rowText = (row?.textContent || '').toLowerCase();
-          if (rowText.includes('deployment') || rowText.includes('target')) {
-            btn.click(); return true;
+          const ctx = btn.closest('ui5-li, li, tr, [role="row"], div, section') || btn.parentElement;
+          const ctxText = (ctx?.textContent || '').toLowerCase();
+          if (ctxText.includes('deployment') || ctxText.includes('target')) {
+            btn.click(); return 'assign-near-target';
           }
         }
       }
-      // Fallback: first "Assign" button on page
+      // Strategy 2: Any "Assign" button on the page
       for (const btn of btns) {
-        if ((btn.textContent || '').trim() === 'Assign') { btn.click(); return true; }
+        if ((btn.textContent || '').trim() === 'Assign') { btn.click(); return 'assign-first'; }
       }
+      // Strategy 3: Look for links/buttons that mention "deployment" or "assign"
+      for (const btn of btns) {
+        const txt = (btn.textContent || '').trim().toLowerCase();
+        if (txt.includes('assign') && txt.includes('deploy')) { btn.click(); return 'assign-deploy-combo'; }
+      }
+      // Strategy 4: Check if there's a data-action-name for this
+      const byAction = document.querySelector('[data-action-name*="assign" i], [data-action-name*="deploy" i]');
+      if (byAction) { byAction.click(); return 'data-action'; }
       return false;
     }).catch(() => false);
     if (!clicked) throw new Error('Assign button not found');
-    console.log('[CBC] Clicked Assign button');
+    console.log(`[CBC] Clicked Assign button (${clicked})`);
   }, 'Click the "Assign" button next to "Assign Deployment Target" on the Overview page.', { credentials: creds });
   await page.waitForTimeout(2000);
 
