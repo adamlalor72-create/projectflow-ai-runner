@@ -9,7 +9,7 @@ import { updateStep } from '../lib/api.js';
 const COUNTRIES = {
   AE:"UAE",AU:"Australia",CA:"Canada",CH:"Switzerland",DE:"Germany",
   FR:"France",GB:"United Kingdom",IN:"India",JP:"Japan",SA:"Saudi Arabia",
-  SG:"Singapore",US:"United States",ZA:"South Africa",NL:"Netherlands",
+  SG:"Singapore",US:"USA",ZA:"South Africa",NL:"Netherlands",
   SE:"Sweden",IT:"Italy",
 };
 
@@ -311,9 +311,29 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
   await page.waitForTimeout(1000);
   await dismissDialogs(page);
 
-  // Click Save — from recording: getByRole('button', { name: 'Save Emphasized' })
-  await page.getByRole('button', { name: 'Save Emphasized' }).click({ timeout: 5000 });
-  console.log('[CBC] Saved country selection');
+  // Click Save — may not be needed if CU already handled it
+  try {
+    const saveBtn = page.getByRole('button', { name: 'Save Emphasized' });
+    if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await saveBtn.click({ timeout: 5000 });
+      console.log('[CBC] Saved country selection');
+    } else {
+      // Try evaluate fallback
+      const clicked = await page.evaluate(() => {
+        const btns = document.querySelectorAll('ui5-button');
+        for (const b of btns) {
+          if ((b.textContent || '').trim() === 'Save' && b.getAttribute('design') === 'Emphasized') {
+            b.click(); return true;
+          }
+        }
+        return false;
+      }).catch(() => false);
+      if (clicked) console.log('[CBC] Saved via evaluate');
+      else console.log('[CBC] Save button not visible — may have been handled already');
+    }
+  } catch (e) {
+    console.log('[CBC] Save step skipped:', e.message);
+  }
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
   await screenshot(page, 'cbc-scope-country-saved');
