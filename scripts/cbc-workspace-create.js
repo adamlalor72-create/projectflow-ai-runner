@@ -360,20 +360,26 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
     await screenshot(page, 'cbc-bundles-added');
   }
 
-  // Add ledger scenarios — from recording: ui5-card filter + getByLabel('Add') + 'Confirm and Add Scenario'
+  // Add ledger scenarios — fuzzy match on card text (e.g. "USGAAP" matches "US GAAP (2VA)")
   if (ledgerScenarios && ledgerScenarios.length > 0) {
     console.log(`[CBC] Adding ledger scenarios: ${ledgerScenarios.join(', ')}`);
     for (const scenario of ledgerScenarios) {
       try {
         await page.evaluate(() => window.scrollBy(0, 500));
         await page.waitForTimeout(1000);
-        const card = page.locator('ui5-card').filter({ hasText: scenario });
+        // Build search terms from scenario name (e.g. "USGAAP" → ["USGAAP","US GAAP","2VA"])
+        const searchTerms = [scenario];
+        if (scenario.toUpperCase() === 'USGAAP' || scenario === '2VA') searchTerms.push('US GAAP', '2VA');
+        if (scenario.toUpperCase() === 'IFRS' || scenario === '1GA') searchTerms.push('IFRS', '1GA');
+
+        // Find any card containing one of the search terms and click its Add button
+        const card = page.locator('ui5-card').filter({ hasText: new RegExp(searchTerms.join('|'), 'i') });
         const addBtn = card.getByLabel('Add');
         if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
           await addBtn.click({ timeout: 5000 });
           console.log(`[CBC] Clicked Add for: ${scenario}`);
           await page.waitForTimeout(2000);
-          // Confirm irreversibility — from recording
+          // Confirm irreversibility
           const confirmBtn = page.getByRole('button', { name: 'Confirm and Add Scenario' });
           if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
             await confirmBtn.click({ timeout: 5000 });
@@ -382,7 +388,7 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
           await page.waitForTimeout(1500);
           await dismissDialogs(page);
         } else {
-          console.log(`[CBC] Scenario "${scenario}" — already added or not found`);
+          console.log(`[CBC] Scenario "${scenario}" — Add button not visible (may be pre-added)`);
         }
       } catch (e) {
         console.warn(`[CBC] Scenario "${scenario}" error: ${e.message}`);
@@ -391,24 +397,63 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
     await screenshot(page, 'cbc-ledger-scenarios');
   }
 
-  // Complete Activity — from recording: getByRole('button', { name: 'Complete Activity Emphasized' })
+  // Complete Activity — scroll to top first, then click
   console.log('[CBC] ── Completing Activity ──');
-  await page.getByRole('button', { name: 'Complete Activity Emphasized' }).click({ timeout: 10000 });
-  console.log('[CBC] Clicked Complete Activity');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(1000);
+  await screenshot(page, 'cbc-before-complete-activity');
+
+  await withAIFallback(page, async () => {
+    try {
+      await page.getByRole('button', { name: 'Complete Activity Emphasized' }).click({ timeout: 10000 });
+    } catch {
+      // Fallback via evaluate
+      const clicked = await page.evaluate(() => {
+        const btns = document.querySelectorAll('ui5-button');
+        for (const b of btns) {
+          if ((b.textContent || '').trim().includes('Complete Activity')) { b.click(); return true; }
+        }
+        return false;
+      });
+      if (!clicked) throw new Error('Complete Activity not found');
+    }
+    console.log('[CBC] Clicked Complete Activity');
+  }, 'Click "Complete Activity" button at the top of the page.', { credentials: creds });
   await page.waitForTimeout(2000);
 
   // Confirm — from recording: getByRole('button', { name: 'Confirm Emphasized' })
-  await page.getByRole('button', { name: 'Confirm Emphasized' }).click({ timeout: 5000 });
-  console.log('[CBC] Confirmed');
-  await page.waitForTimeout(2000);
+  await withAIFallback(page, async () => {
+    try {
+      await page.getByRole('button', { name: 'Confirm Emphasized' }).click({ timeout: 5000 });
+    } catch {
+      const clicked = await page.evaluate(() => {
+        const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
+        const dlg = dlgs[dlgs.length - 1];
+        if (!dlg) return false;
+        const btns = dlg.querySelectorAll('ui5-button');
+        for (const b of btns) {
+          if ((b.textContent || '').trim() === 'Confirm' || b.getAttribute('design') === 'Emphasized') {
+            b.click(); return true;
+          }
+        }
+        return false;
+      });
+      if (!clicked) throw new Error('Confirm not found');
+    }
+    console.log('[CBC] Confirmed');
+  }, 'Click "Confirm" in the confirmation dialog.', { credentials: creds });
+  await page.waitForTimeout(3000);
 
-  // Close progress dialog immediately — from recording: #cancel-milestone-progress-dialog Close
+  // Close progress dialog — from recording: #cancel-milestone-progress-dialog Close
   try {
     const closeBtn = page.locator('#cancel-milestone-progress-dialog').getByRole('button', { name: 'Close' });
-    await closeBtn.click({ timeout: 5000 });
-    console.log('[CBC] Closed progress dialog');
+    if (await closeBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await closeBtn.click({ timeout: 5000 });
+      console.log('[CBC] Closed progress dialog');
+    } else {
+      await dismissDialogs(page);
+    }
   } catch {
-    // Fallback: dismiss any open dialog
     await dismissDialogs(page);
   }
   await screenshot(page, 'cbc-activity-completed');
