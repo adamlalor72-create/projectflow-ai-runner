@@ -165,22 +165,45 @@ async function stepAssignDeploymentTarget(page, creds) {
   await page.waitForTimeout(2000);
 
   // Select first checkbox in the deployment target dialog
+  // Recording used: getByRole('row', {...}).getByRole('checkbox').click()
+  // The role-based click properly triggers UI5 selection events
   await withAIFallback(page, async () => {
-    // Try clicking the row first (triggers selection), then the checkbox
-    const checked = await page.evaluate(() => {
-      const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
-      const dlg = dlgs[dlgs.length - 1];
-      if (!dlg) return false;
-      // Strategy 1: Click the row itself (some UI5 tables select on row click)
-      const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
-      if (row) { row.click(); }
-      // Strategy 2: Find and click checkbox
-      const cb = dlg.querySelector('ui5-checkbox, [role="checkbox"]');
-      if (cb) { cb.click(); return true; }
-      return !!row;
-    });
-    if (!checked) throw new Error('No checkbox found');
-    console.log('[CBC] Clicked deployment target row/checkbox');
+    // Strategy 1: Click the first checkbox via Playwright role (triggers UI5 binding)
+    const rows = page.locator('ui5-dialog[open] ui5-table-row, ui5-dialog[open] [role="row"]');
+    const rowCount = await rows.count().catch(() => 0);
+    let selected = false;
+    if (rowCount > 0) {
+      // Click the first row's checkbox using Playwright (not evaluate)
+      const firstRow = rows.first();
+      const cb = firstRow.getByRole('checkbox');
+      if (await cb.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await cb.click({ force: true, timeout: 5000 });
+        selected = true;
+        console.log('[CBC] Clicked deployment target checkbox via Playwright role');
+      }
+    }
+    // Strategy 2: Click any visible checkbox in the topmost dialog
+    if (!selected) {
+      const allCb = page.locator('ui5-dialog[open] ui5-checkbox, ui5-dialog[open] [role="checkbox"]');
+      if (await allCb.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+        await allCb.first().click({ force: true, timeout: 5000 });
+        selected = true;
+        console.log('[CBC] Clicked deployment target checkbox (generic)');
+      }
+    }
+    // Strategy 3: Evaluate fallback — click row then checkbox
+    if (!selected) {
+      await page.evaluate(() => {
+        const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
+        const dlg = dlgs[dlgs.length - 1];
+        if (!dlg) return;
+        const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
+        if (row) row.click();
+        const cb = dlg.querySelector('ui5-checkbox, [role="checkbox"]');
+        if (cb) cb.click();
+      });
+      console.log('[CBC] Clicked deployment target via evaluate fallback');
+    }
   }, 'Select the first deployment target checkbox.', { credentials: creds });
 
   // Wait for the Assign button to become enabled
