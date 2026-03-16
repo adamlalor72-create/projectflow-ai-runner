@@ -1,10 +1,9 @@
 // ProjectFlow AI Runner — CBC Workspace Setup (Deterministic)
-// Creates workspace, assigns deployment target, defines scope,
-// adds bundles/ledger scenarios, completes activity.
-// Computer Use only as fallback for unexpected dialogs.
+// Rewritten from Playwright codegen recording — uses role-based selectors
+// that work correctly with UI5 Web Components and stacked dialogs.
 
 import { newPage, screenshot } from '../lib/browser.js';
-import { aiResolve, withAIFallback } from '../lib/ai-agent.js';
+import { withAIFallback } from '../lib/ai-agent.js';
 import { updateStep } from '../lib/api.js';
 
 const COUNTRIES = {
@@ -14,65 +13,7 @@ const COUNTRIES = {
   SE:"Sweden",IT:"Italy",
 };
 
-// ── Shadow DOM helpers for CBC (UI5 Web Components) ─────────
-
-async function cbcClick(page, selector, label, timeout = 5000) {
-  const el = page.locator(selector).first();
-  if (await el.isVisible({ timeout }).catch(() => false)) {
-    await el.scrollIntoViewIfNeeded().catch(() => {});
-    await el.click({ timeout });
-    console.log(`[CBC] Clicked: ${label}`);
-    return true;
-  }
-  console.warn(`[CBC] Not found: ${label} (${selector})`);
-  return false;
-}
-
-async function cbcClickText(page, text, tag = '*', timeout = 5000) {
-  // Click element by visible text — handles UI5 shadow DOM
-  const selectors = [
-    `${tag}:has-text("${text}")`,
-    `text="${text}"`,
-    `[title="${text}"]`,
-  ];
-  for (const sel of selectors) {
-    const el = page.locator(sel).first();
-    if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await el.scrollIntoViewIfNeeded().catch(() => {});
-      await el.click({ timeout });
-      console.log(`[CBC] Clicked text: "${text}"`);
-      return true;
-    }
-  }
-  // Fallback: evaluate in page context for shadow DOM
-  const clicked = await page.evaluate((t) => {
-    const walk = (root) => {
-      for (const el of root.querySelectorAll('*')) {
-        const txt = (el.textContent || '').trim();
-        if (txt === t || txt.includes(t)) { el.click(); return true; }
-        if (el.shadowRoot && walk(el.shadowRoot)) return true;
-      }
-      return false;
-    };
-    return walk(document);
-  }, text).catch(() => false);
-  if (clicked) { console.log(`[CBC] Clicked text (shadow): "${text}"`); return true; }
-  console.warn(`[CBC] Text not found: "${text}"`);
-  return false;
-}
-
-async function cbcFillInput(page, selector, value, label) {
-  const el = page.locator(selector).first();
-  if (await el.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await el.click({ timeout: 3000 });
-    await page.keyboard.press('Meta+a');
-    await page.keyboard.type(value, { delay: 30 });
-    console.log(`[CBC] Filled ${label}: "${value}"`);
-    return true;
-  }
-  console.warn(`[CBC] Input not found: ${label} (${selector})`);
-  return false;
-}
+// ── Helpers ─────────────────────────────────────────────────
 
 async function dismissDialogs(page) {
   for (let i = 0; i < 3; i++) {
@@ -101,387 +42,229 @@ async function dismissDialogs(page) {
 async function loginToCBC(page, baseUrl, username, password) {
   console.log(`[CBC] Navigating to ${baseUrl}`);
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(5000);
 
-  const emailField = await page.$('input[name="j_username"], input[name="email"], input[type="email"], #j_username');
-  if (emailField) {
+  // Check for login form
+  const emailField = page.getByRole('textbox', { name: 'Email or User Name' });
+  if (await emailField.isVisible({ timeout: 3000 }).catch(() => false)) {
     console.log('[CBC] Login form found');
+    await emailField.click();
     await emailField.fill(username);
-    const passField = await page.$('input[name="j_password"], input[name="password"], input[type="password"]');
-    if (passField) {
-      await passField.fill(password);
-      const btn = await page.$('button[type="submit"], input[type="submit"]');
-      if (btn) await btn.click();
-    } else {
-      const btn = await page.$('button[type="submit"], input[type="submit"]');
-      if (btn) await btn.click();
-      await page.waitForTimeout(2000);
-      const p2 = await page.$('input[name="j_password"], input[name="password"], input[type="password"]');
-      if (p2) { await p2.fill(password); const b2 = await page.$('button[type="submit"]'); if (b2) await b2.click(); }
+    await emailField.press('Tab');
+    await page.getByRole('textbox', { name: 'Password' }).fill(password);
+    await page.getByRole('textbox', { name: 'Password' }).press('Enter');
+    await page.waitForTimeout(3000);
+    // Handle "Continue" button if it appears (password change/2FA)
+    const cont = page.getByRole('button', { name: 'Continue' });
+    if (await cont.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await cont.click();
+      await page.waitForTimeout(3000);
     }
-    await page.waitForTimeout(5000);
   } else {
     console.log('[CBC] Already authenticated');
   }
+  await page.waitForTimeout(3000);
 
-  const ready = await page.evaluate(() =>
-    !!(document.querySelector('ui5-side-navigation') || document.body?.innerText?.includes('Central Business Configuration'))
-  ).catch(() => false);
-  if (!ready) throw new Error('Failed to login to CBC');
-  console.log('[CBC] Logged in');
+  // Close any lightbox/help popups
+  const closeLightbox = page.getByRole('button', { name: 'Close Lightbox' });
+  if (await closeLightbox.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await closeLightbox.click();
+    await page.waitForTimeout(500);
+  }
+  const closeBtn = page.getByRole('button', { name: 'Close' });
+  if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await closeBtn.click().catch(() => {});
+    await page.waitForTimeout(500);
+  }
+
   await dismissDialogs(page);
   await screenshot(page, 'cbc-logged-in');
+  console.log('[CBC] Logged in');
 }
 
 // ══════════════════════════════════════════════════════════════
-// Step functions — one per workspace setup phase
+// Step 1: Create Workspace
 // ══════════════════════════════════════════════════════════════
-
 async function stepCreateWorkspace(page, wsName, wsType, creds) {
   console.log(`[CBC] ── Creating workspace: ${wsName} (${wsType}) ──`);
 
-  // Check if Workspaces dialog is already open (CBC may show it on load or after previous workspace)
-  const wsDialogAlreadyOpen = await page.locator('ui5-dialog[header-text="Workspaces"][open], ui5-dialog[data-help-id="switch-project-dialog"][open]').first()
+  // Check if Workspaces dialog already open
+  const wsDialogOpen = await page.getByRole('button', { name: 'Create New Emphasized' })
     .isVisible({ timeout: 2000 }).catch(() => false);
 
-  if (wsDialogAlreadyOpen) {
-    console.log('[CBC] Workspaces dialog already open — skipping Settings/Switch Workspace');
-  } else {
-    // Close any other blocking dialogs first
+  if (!wsDialogOpen) {
+    // Navigate to Settings → Switch Workspace
     await dismissDialogs(page);
-    await page.waitForTimeout(500);
-
-    // 1. Click Settings in sidebar — use evaluate to bypass any overlays
     await withAIFallback(page, async () => {
-      const clicked = await page.evaluate(() => {
+      await page.evaluate(() => {
         const item = document.querySelector('ui5-side-navigation-item[text="Settings"]') ||
                      document.querySelector('[data-action-name="goToSettings"]');
-        if (item) { item.click(); return true; }
-        return false;
-      }).catch(() => false);
-      if (!clicked) throw new Error('Settings not found in sidebar');
+        if (item) item.click(); else throw new Error('Settings not found');
+      });
       console.log('[CBC] Clicked Settings');
-    }, 'Click "Settings" in the bottom-left sidebar navigation.', { credentials: creds });
+    }, 'Click "Settings" in the sidebar.', { credentials: creds });
     await page.waitForTimeout(1500);
 
-    // 2. Click Switch Workspace — use evaluate
     await withAIFallback(page, async () => {
-      const clicked = await page.evaluate(() => {
+      await page.evaluate(() => {
         const btn = document.querySelector('[data-action-name="switchWorkspace"]');
-        if (btn) { btn.click(); return true; }
-        const btns = document.querySelectorAll('ui5-button');
-        for (const b of btns) {
-          if ((b.textContent || '').trim().includes('Switch Workspace')) { b.click(); return true; }
+        if (btn) btn.click();
+        else {
+          const btns = document.querySelectorAll('ui5-button');
+          for (const b of btns) { if ((b.textContent||'').trim().includes('Switch Workspace')) { b.click(); return; } }
+          throw new Error('Switch Workspace not found');
         }
-        return false;
-      }).catch(() => false);
-      if (!clicked) throw new Error('Switch Workspace not found');
+      });
       console.log('[CBC] Clicked Switch Workspace');
-    }, 'Click the "Switch Workspace" button.', { credentials: creds });
+    }, 'Click "Switch Workspace".', { credentials: creds });
     await page.waitForTimeout(2000);
+  } else {
+    console.log('[CBC] Workspaces dialog already open');
   }
 
-  // 3. Click Create New in the workspaces dialog — use evaluate (Workspaces dialog may be behind other elements)
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
-      // Find the Workspaces dialog
-      for (const dlg of dlgs) {
-        if ((dlg.getAttribute('header-text') || '').includes('Workspace')) {
-          const btns = dlg.querySelectorAll('ui5-button');
-          for (const b of btns) {
-            if ((b.textContent || '').trim() === 'Create New' || (b.textContent || '').trim() === 'Create') {
-              b.click(); return true;
-            }
-          }
-        }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Create New not found');
-    console.log('[CBC] Clicked Create New');
-  }, 'In the Workspaces dialog, click the "Create New" button.', { credentials: creds });
+  // Click "Create New" — from recording: getByRole('button', { name: 'Create New Emphasized' })
+  await page.getByRole('button', { name: 'Create New Emphasized' }).click({ timeout: 5000 });
+  console.log('[CBC] Clicked Create New');
   await page.waitForTimeout(2000);
 
-  // 4. Fill workspace title — must target the NEW WORKSPACE dialog specifically (not the Workspaces dialog behind it)
-  await page.waitForTimeout(1500);
-  await withAIFallback(page, async () => {
-    // The New Workspace dialog has data-help-id="create-workspace-dialog" and initial-focus="title"
-    const filled = await page.evaluate((name) => {
-      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
-                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
-      if (!dlg) return false;
-      // Find the title input — it has id="title" or is the first input in this specific dialog
-      const titleInput = dlg.querySelector('#title') || dlg.querySelector('ui5-input');
-      if (!titleInput) return false;
-      // Focus and set value via shadow DOM native input
-      const inner = titleInput.shadowRoot?.querySelector('input') || titleInput;
-      inner.focus();
-      inner.value = name;
-      inner.dispatchEvent(new Event('input', { bubbles: true }));
-      inner.dispatchEvent(new Event('change', { bubbles: true }));
-      // Also set the UI5 property directly
-      if (typeof titleInput.setAttribute === 'function') titleInput.setAttribute('value', name);
-      return true;
-    }, wsName).catch(() => false);
-    if (filled) {
-      console.log(`[CBC] Filled title via create-workspace-dialog: "${wsName}"`);
-    } else {
-      throw new Error('Title input not found in New Workspace dialog');
-    }
-  }, `Type "${wsName}" into the Title input field in the New Workspace dialog.`, { credentials: creds });
-  await page.waitForTimeout(500);
+  // Fill title — from recording: getByRole('textbox', { name: 'Title' })
+  await page.getByRole('textbox', { name: 'Title' }).click({ timeout: 5000 });
+  await page.getByRole('textbox', { name: 'Title' }).fill(wsName);
+  console.log(`[CBC] Filled title: "${wsName}"`);
 
-  // 5. Select workspace type — scoped to the New Workspace dialog
-  await withAIFallback(page, async () => {
-    const selected = await page.evaluate((type) => {
-      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
-                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
-      if (!dlg) return false;
-      const sel = dlg.querySelector('ui5-select');
-      if (!sel) return false;
-      sel.click();
-      // Wait a tick for dropdown, then find option
-      setTimeout(() => {
-        const opts = document.querySelectorAll('ui5-option, ui5-static-area-item ui5-option');
-        for (const o of opts) {
-          if ((o.textContent || '').trim().includes(type)) { o.click(); return; }
-        }
-      }, 300);
-      return true;
-    }, wsType).catch(() => false);
-    if (selected) {
-      await page.waitForTimeout(800);
-      console.log(`[CBC] Selected workspace type: ${wsType}`);
-    }
-  }, `Select "${wsType}" from the workspace type dropdown in the dialog.`, { credentials: creds });
+  // Select workspace type — from recording: getByRole('combobox', { name: 'Workspace Type' })
+  await page.getByRole('combobox', { name: 'Workspace Type' }).click({ timeout: 5000 });
   await page.waitForTimeout(500);
+  // Click the matching option
+  await page.getByRole('option', { name: wsType }).click({ timeout: 3000 }).catch(async () => {
+    // Fallback: click by text in dropdown
+    await page.locator(`ui5-option:has-text("${wsType}")`).click({ timeout: 3000 });
+  });
+  console.log(`[CBC] Selected type: ${wsType}`);
 
-  // 6. Click Create — scoped to the New Workspace dialog
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      const dlg = document.querySelector('ui5-dialog[data-help-id="create-workspace-dialog"][open]') ||
-                  document.querySelector('ui5-dialog[header-text="New Workspace"][open]');
-      if (!dlg) return false;
-      const btns = dlg.querySelectorAll('ui5-button');
-      for (const b of btns) {
-        if ((b.textContent || '').trim() === 'Create' || b.getAttribute('design') === 'Emphasized') {
-          b.click(); return true;
-        }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Create button not found in New Workspace dialog');
-  }, 'Click the "Create" button to create the workspace.', { credentials: creds });
+  // Click Create — from recording: getByRole('button', { name: 'Create Emphasized' })
+  await page.getByRole('button', { name: 'Create Emphasized' }).click({ timeout: 5000 });
+  console.log('[CBC] Clicked Create');
   await page.waitForTimeout(5000);
   await dismissDialogs(page);
   await screenshot(page, `cbc-workspace-${wsName}-created`);
   console.log(`[CBC] Workspace "${wsName}" created`);
 }
 
+// ══════════════════════════════════════════════════════════════
+// Step 2: Assign Deployment Target
+// ══════════════════════════════════════════════════════════════
 async function stepAssignDeploymentTarget(page, creds) {
   console.log('[CBC] ── Assigning Deployment Target ──');
-
-  // Wait for Overview page to fully load after workspace creation
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(3000);
   await screenshot(page, 'cbc-overview-before-assign');
 
-  // Click "Assign" button — broaden search to handle different page layouts
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      // Strategy 1: Find button with text "Assign" near "Deployment Target"
-      const btns = document.querySelectorAll('ui5-button, button, [role="button"], a');
-      for (const btn of btns) {
-        const txt = (btn.textContent || '').trim();
-        if (txt === 'Assign') {
-          const ctx = btn.closest('ui5-li, li, tr, [role="row"], div, section') || btn.parentElement;
-          const ctxText = (ctx?.textContent || '').toLowerCase();
-          if (ctxText.includes('deployment') || ctxText.includes('target')) {
-            btn.click(); return 'assign-near-target';
-          }
-        }
-      }
-      // Strategy 2: Any "Assign" button on the page
-      for (const btn of btns) {
-        if ((btn.textContent || '').trim() === 'Assign') { btn.click(); return 'assign-first'; }
-      }
-      // Strategy 3: Look for links/buttons that mention "deployment" or "assign"
-      for (const btn of btns) {
-        const txt = (btn.textContent || '').trim().toLowerCase();
-        if (txt.includes('assign') && txt.includes('deploy')) { btn.click(); return 'assign-deploy-combo'; }
-      }
-      // Strategy 4: Check if there's a data-action-name for this
-      const byAction = document.querySelector('[data-action-name*="assign" i], [data-action-name*="deploy" i]');
-      if (byAction) { byAction.click(); return 'data-action'; }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Assign button not found');
-    console.log(`[CBC] Clicked Assign button (${clicked})`);
-  }, 'Click the "Assign" button next to "Assign Deployment Target" on the Overview page.', { credentials: creds });
+  // Click Assign — from recording: getByRole('button', { name: 'Assign' })
+  await page.getByRole('button', { name: 'Assign' }).click({ timeout: 10000 });
+  console.log('[CBC] Clicked Assign');
   await page.waitForTimeout(2000);
 
-  // Select the first checkbox/radio in the deployment target dialog — scoped to topmost dialog
+  // Select first checkbox in the deployment target dialog
+  // From recording: getByRole('row', {...}).getByRole('checkbox')
+  // Simplified: click the first checkbox in any open dialog
   await withAIFallback(page, async () => {
-    const selected = await page.evaluate(() => {
-      // Find the topmost open dialog (last one in DOM order)
-      const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
-      const dlg = dlgs[dlgs.length - 1]; // topmost
-      if (!dlg) return false;
-      // Try checkbox, radio, or table row
-      const check = dlg.querySelector('ui5-checkbox, ui5-radio-button, input[type="checkbox"], input[type="radio"]');
-      if (check) { check.click(); return true; }
-      const row = dlg.querySelector('ui5-table-row, tr');
-      if (row) { row.click(); return true; }
-      return false;
-    }).catch(() => false);
-    if (!selected) throw new Error('No deployment target option found');
-    console.log('[CBC] Selected deployment target');
-  }, 'Select the first deployment target in the dialog.', { credentials: creds });
-  await page.waitForTimeout(1000);
-
-  // Click Assign/OK in the topmost dialog
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
+    const checked = await page.evaluate(() => {
       const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
       const dlg = dlgs[dlgs.length - 1];
       if (!dlg) return false;
-      // Prefer Emphasized button, then "Assign", then "OK"
-      const btns = dlg.querySelectorAll('ui5-button');
-      for (const b of btns) {
-        if (b.getAttribute('design') === 'Emphasized') { b.click(); return true; }
-      }
-      for (const b of btns) {
-        const t = (b.textContent || '').trim();
-        if (t === 'Assign' || t === 'OK') { b.click(); return true; }
-      }
+      const cb = dlg.querySelector('ui5-checkbox, [role="checkbox"]');
+      if (cb) { cb.click(); return true; }
+      const row = dlg.querySelector('ui5-table-row, tr[role="row"]');
+      if (row) { row.click(); return true; }
       return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Assign confirm button not found');
-    console.log('[CBC] Confirmed deployment target');
-  }, 'Click "Assign" or "OK" to confirm the deployment target selection.', { credentials: creds });
+    });
+    if (!checked) throw new Error('No checkbox found');
+    console.log('[CBC] Selected deployment target');
+  }, 'Select the first deployment target checkbox.', { credentials: creds });
+  await page.waitForTimeout(1000);
+
+  // Click Assign Emphasized — from recording: getByRole('button', { name: 'Assign Emphasized' })
+  await page.getByRole('button', { name: 'Assign Emphasized' }).click({ timeout: 5000 });
+  console.log('[CBC] Confirmed assignment');
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
   await screenshot(page, 'cbc-deployment-target-assigned');
   console.log('[CBC] Deployment target assigned');
 }
 
+// ══════════════════════════════════════════════════════════════
+// Step 3: Define Scope (country, bundles, ledger, complete)
+// ══════════════════════════════════════════════════════════════
 async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerScenarios, creds) {
   console.log(`[CBC] ── Defining Scope (${countryLabel}) ──`);
 
-  // Click "Open" on the Define Scope row — use evaluate to bypass any overlaying elements
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      const btns = document.querySelectorAll('ui5-button, button, [role="button"]');
-      for (const btn of btns) {
-        const txt = (btn.textContent || '').trim();
-        if (txt === 'Open') {
-          const row = btn.closest('ui5-li, li, tr, [role="row"], div') || btn.parentElement;
-          const rowText = (row?.textContent || '').toLowerCase();
-          if (rowText.includes('scope') || rowText.includes('define')) {
-            btn.click(); return true;
-          }
-        }
-      }
-      for (const btn of btns) {
-        if ((btn.textContent || '').trim() === 'Open') { btn.click(); return true; }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Open button for Define Scope not found');
-    console.log('[CBC] Clicked Open on Define Scope');
-  }, 'Click the "Open" button on the "Define Scope" row.', { credentials: creds });
+  // Click Open — from recording: getByRole('button', { name: 'Open' })
+  await page.getByRole('button', { name: 'Open' }).click({ timeout: 10000 });
+  console.log('[CBC] Clicked Open on Define Scope');
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
 
-  // Select country — use evaluate for all interactions
+  // Select country — from recording: getByLabel('Selected Country/Region is')
+  const countryInput = page.getByLabel('Selected Country/Region is').locator('#ui5-multi-combobox-input');
+  await countryInput.click({ timeout: 5000 });
+  await countryInput.fill(countryLabel.slice(0, 6)); // Type partial to trigger dropdown
+  console.log(`[CBC] Typed country: "${countryLabel.slice(0, 6)}"`);
+  await page.waitForTimeout(1500);
+
+  // Click matching dropdown item — dynamic IDs so use text match
   await withAIFallback(page, async () => {
-    const selected = await page.evaluate((label) => {
-      // Find multi-combobox for country
-      const mcbs = document.querySelectorAll('ui5-multi-combobox, ui5-combobox');
-      for (const mcb of mcbs) {
-        const ph = (mcb.getAttribute('placeholder') || '').toLowerCase();
-        const id = (mcb.getAttribute('id') || '').toLowerCase();
-        if (ph.includes('country') || id.includes('country') || mcbs.length === 1) {
-          // Open the dropdown
-          const inner = mcb.shadowRoot?.querySelector('input') || mcb;
-          inner.focus();
-          inner.value = label;
-          inner.dispatchEvent(new Event('input', { bubbles: true }));
-          return 'typed';
-        }
+    // Try clicking the dropdown suggestion that contains the country name
+    const item = page.getByRole('option', { name: new RegExp(countryLabel, 'i') });
+    if (await item.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await item.click();
+      console.log(`[CBC] Selected country option: ${countryLabel}`);
+      return;
+    }
+    // Fallback: click any visible list item containing the country text
+    const li = page.locator(`ui5-li:has-text("${countryLabel}"), ui5-mcb-item:has-text("${countryLabel}")`).first();
+    if (await li.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await li.click();
+      console.log(`[CBC] Selected country via locator: ${countryLabel}`);
+      return;
+    }
+    // Fallback 2: page.evaluate to find and click in popover/static area
+    const clicked = await page.evaluate((label) => {
+      const all = document.querySelectorAll('ui5-mcb-item, ui5-li, [role="option"]');
+      for (const el of all) {
+        if ((el.textContent || '').includes(label)) { el.click(); return true; }
       }
       return false;
-    }, countryLabel).catch(() => false);
-    if (selected === 'typed') {
-      await page.waitForTimeout(1000);
-      // Click the matching item in the popup
-      const itemClicked = await page.evaluate((label) => {
-        const items = document.querySelectorAll('ui5-mcb-item, ui5-li, ui5-cb-item, ui5-suggestion-item');
-        for (const item of items) {
-          if ((item.textContent || '').includes(label)) { item.click(); return true; }
-        }
-        // Also check static area (UI5 renders popups in static area)
-        const staticArea = document.querySelector('ui5-static-area');
-        if (staticArea) {
-          const popItems = staticArea.querySelectorAll('ui5-li, [role="option"]');
-          for (const item of popItems) {
-            if ((item.textContent || '').includes(label)) { item.click(); return true; }
-          }
-        }
-        return false;
-      }, countryLabel).catch(() => false);
-      if (itemClicked) console.log(`[CBC] Selected country: ${countryLabel}`);
-      else console.warn(`[CBC] Country item not found in dropdown — may need manual selection`);
-    } else {
-      throw new Error('Country combobox not found');
-    }
-  }, `Select "${countryLabel}" in the country selection combobox.`, { credentials: creds });
+    }, countryLabel);
+    if (!clicked) throw new Error(`Country "${countryLabel}" not found in dropdown`);
+    console.log(`[CBC] Selected country via evaluate: ${countryLabel}`);
+  }, `Select "${countryLabel}" from the country dropdown.`, { credentials: creds });
   await page.waitForTimeout(1000);
 
-  // Click Save — use evaluate
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      const btns = document.querySelectorAll('ui5-button');
-      for (const b of btns) {
-        if ((b.textContent || '').trim() === 'Save' || (b.getAttribute('design') === 'Emphasized' && (b.textContent || '').includes('Save'))) {
-          b.click(); return true;
-        }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Save button not found');
-    console.log('[CBC] Clicked Save');
-  }, 'Click "Save" to confirm the country selection.', { credentials: creds });
+  // Dismiss the "country you have selected" info dialog if it appears
+  await page.waitForTimeout(1000);
+  await dismissDialogs(page);
+
+  // Click Save — from recording: getByRole('button', { name: 'Save Emphasized' })
+  await page.getByRole('button', { name: 'Save Emphasized' }).click({ timeout: 5000 });
+  console.log('[CBC] Saved country selection');
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
   await screenshot(page, 'cbc-scope-country-saved');
-  console.log(`[CBC] Country ${countryLabel} saved`);
 
-  // Add bundles (Baseline Accelerator + Enterprise Management usually pre-selected)
+  // Add bundles — from recording: ui5-card filter + getByLabel('Add')
   if (bundles && bundles.length > 0) {
     console.log(`[CBC] Adding bundles: ${bundles.join(', ')}`);
     for (const bundle of bundles) {
       try {
-        // Look for bundle card and click its Add button
-        const added = await page.evaluate((bundleName) => {
-          const cards = document.querySelectorAll('ui5-card, [role="region"], div');
-          for (const card of cards) {
-            const text = (card.textContent || '').trim();
-            if (text.includes(bundleName)) {
-              const btn = card.querySelector('ui5-button:has-text("Add"), button');
-              if (btn && (btn.textContent || '').trim() === 'Add') {
-                btn.click(); return true;
-              }
-            }
-          }
-          return false;
-        }, bundle).catch(() => false);
-        if (added) {
+        const card = page.locator('ui5-card').filter({ hasText: bundle });
+        const addBtn = card.getByLabel('Add');
+        if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await addBtn.click({ timeout: 5000 });
           console.log(`[CBC] Added bundle: ${bundle}`);
           await page.waitForTimeout(1500);
           await dismissDialogs(page);
         } else {
-          console.log(`[CBC] Bundle "${bundle}" — may already be selected or not found`);
+          console.log(`[CBC] Bundle "${bundle}" — already added or not found`);
         }
       } catch (e) {
         console.warn(`[CBC] Bundle "${bundle}" error: ${e.message}`);
@@ -490,38 +273,29 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
     await screenshot(page, 'cbc-bundles-added');
   }
 
-  // Add ledger scenarios (e.g. US GAAP 2VA)
+  // Add ledger scenarios — from recording: ui5-card filter + getByLabel('Add') + 'Confirm and Add Scenario'
   if (ledgerScenarios && ledgerScenarios.length > 0) {
     console.log(`[CBC] Adding ledger scenarios: ${ledgerScenarios.join(', ')}`);
     for (const scenario of ledgerScenarios) {
       try {
-        // Scroll down to find ledger/scenarios section
         await page.evaluate(() => window.scrollBy(0, 500));
         await page.waitForTimeout(1000);
-
-        const added = await page.evaluate((name) => {
-          const all = document.querySelectorAll('ui5-button, button');
-          // Find "Add" button near the scenario text
-          for (const btn of all) {
-            if ((btn.textContent || '').trim() !== 'Add') continue;
-            const parent = btn.closest('[role="region"], ui5-card, div') || btn.parentElement;
-            if ((parent?.textContent || '').includes(name)) { btn.click(); return true; }
-          }
-          return false;
-        }, scenario).catch(() => false);
-
-        if (added) {
-          console.log(`[CBC] Clicked Add for scenario: ${scenario}`);
+        const card = page.locator('ui5-card').filter({ hasText: scenario });
+        const addBtn = card.getByLabel('Add');
+        if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await addBtn.click({ timeout: 5000 });
+          console.log(`[CBC] Clicked Add for: ${scenario}`);
           await page.waitForTimeout(2000);
-          // Confirm irreversibility warning
-          const confirmed = await cbcClick(page, 'ui5-dialog[open] ui5-button[design="Emphasized"]', 'Confirm scenario') ||
-            await cbcClickText(page, 'Confirm and Add Scenario', 'ui5-button') ||
-            await cbcClickText(page, 'Confirm', 'ui5-button');
-          if (confirmed) console.log(`[CBC] Confirmed scenario: ${scenario}`);
+          // Confirm irreversibility — from recording
+          const confirmBtn = page.getByRole('button', { name: 'Confirm and Add Scenario' });
+          if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await confirmBtn.click({ timeout: 5000 });
+            console.log(`[CBC] Confirmed scenario: ${scenario}`);
+          }
           await page.waitForTimeout(1500);
           await dismissDialogs(page);
         } else {
-          console.log(`[CBC] Scenario "${scenario}" not found or already added`);
+          console.log(`[CBC] Scenario "${scenario}" — already added or not found`);
         }
       } catch (e) {
         console.warn(`[CBC] Scenario "${scenario}" error: ${e.message}`);
@@ -530,63 +304,32 @@ async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerS
     await screenshot(page, 'cbc-ledger-scenarios');
   }
 
-  // Complete Activity — click, confirm, close immediately
+  // Complete Activity — from recording: getByRole('button', { name: 'Complete Activity Emphasized' })
   console.log('[CBC] ── Completing Activity ──');
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      // Try data-action-name first, then text match
-      const byAction = document.querySelector('[data-action-name="completeActivity"]');
-      if (byAction) { byAction.click(); return true; }
-      const btns = document.querySelectorAll('ui5-button, button');
-      for (const b of btns) {
-        if ((b.textContent || '').trim() === 'Complete Activity') { b.click(); return true; }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Complete Activity button not found');
-    console.log('[CBC] Clicked Complete Activity');
-  }, 'Click the "Complete Activity" button.', { credentials: creds });
+  await page.getByRole('button', { name: 'Complete Activity Emphasized' }).click({ timeout: 10000 });
+  console.log('[CBC] Clicked Complete Activity');
   await page.waitForTimeout(2000);
 
-  // Confirm dialog — target topmost dialog
-  await withAIFallback(page, async () => {
-    const clicked = await page.evaluate(() => {
-      const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
-      const dlg = dlgs[dlgs.length - 1];
-      if (!dlg) return false;
-      const btns = dlg.querySelectorAll('ui5-button');
-      for (const b of btns) {
-        if (b.getAttribute('design') === 'Emphasized') { b.click(); return true; }
-      }
-      for (const b of btns) {
-        if ((b.textContent || '').trim() === 'Confirm') { b.click(); return true; }
-      }
-      return false;
-    }).catch(() => false);
-    if (!clicked) throw new Error('Confirm button not found');
-    console.log('[CBC] Confirmed');
-  }, 'Click "Confirm" in the confirmation dialog.', { credentials: creds });
+  // Confirm — from recording: getByRole('button', { name: 'Confirm Emphasized' })
+  await page.getByRole('button', { name: 'Confirm Emphasized' }).click({ timeout: 5000 });
+  console.log('[CBC] Confirmed');
   await page.waitForTimeout(2000);
 
-  // Close immediately — don't wait for progress bar
-  await dismissDialogs(page);
-  // Try to close any remaining dialogs via evaluate
-  await page.evaluate(() => {
-    const dlgs = [...document.querySelectorAll('ui5-dialog[open]')];
-    for (const dlg of dlgs.reverse()) {
-      const btns = dlg.querySelectorAll('ui5-button');
-      for (const b of btns) {
-        const t = (b.textContent || '').trim().toLowerCase();
-        if (['close', 'ok', 'cancel'].includes(t)) { b.click(); return; }
-      }
-    }
-  }).catch(() => {});
+  // Close progress dialog immediately — from recording: #cancel-milestone-progress-dialog Close
+  try {
+    const closeBtn = page.locator('#cancel-milestone-progress-dialog').getByRole('button', { name: 'Close' });
+    await closeBtn.click({ timeout: 5000 });
+    console.log('[CBC] Closed progress dialog');
+  } catch {
+    // Fallback: dismiss any open dialog
+    await dismissDialogs(page);
+  }
   await screenshot(page, 'cbc-activity-completed');
   console.log('[CBC] Activity completion triggered — moving on');
 }
 
 // ══════════════════════════════════════════════════════════════
-// Main export — deterministic workspace setup
+// Main export
 // ══════════════════════════════════════════════════════════════
 export async function runCBCWorkspaceCreate({ job, step, users, connection, connections }) {
   const page = await newPage();
@@ -600,7 +343,6 @@ export async function runCBCWorkspaceCreate({ job, step, users, connection, conn
     const baseUrl = connection.system_url.replace(/\/$/, '');
     const cfg = typeof job.config === 'string' ? JSON.parse(job.config) : (job.config || {});
 
-    // Parse workspace config
     const wsFrom = cfg.workspace_from || cfg.wsFrom || '';
     const wsTo = cfg.workspace_to || cfg.wsTo || '';
     const wsType = cfg.workspace_type || cfg.workspaceType || 'Evaluation';
@@ -608,25 +350,19 @@ export async function runCBCWorkspaceCreate({ job, step, users, connection, conn
     const countryLabel = COUNTRIES[country] || country;
     const bundles = cfg.bundles || ['Baseline Accelerator'];
     const ledgerScenarios = cfg.ledger_scenarios || cfg.ledger || [];
-    const ledgerArr = Array.isArray(ledgerScenarios) ? ledgerScenarios : (ledgerScenarios === 'None' ? [] : [ledgerScenarios]);
+    const ledgerArr = Array.isArray(ledgerScenarios) ? ledgerScenarios
+      : (ledgerScenarios === 'None' ? [] : [ledgerScenarios]);
 
     // Build workspace name list
     const workspaceNames = [];
     if (wsFrom && wsTo && wsFrom !== wsTo) {
-      const prefixMatch = wsFrom.match(/^(.*?)(\d+)$/);
-      const toMatch = wsTo.match(/^(.*?)(\d+)$/);
-      if (prefixMatch && toMatch && prefixMatch[1] === toMatch[1]) {
-        const prefix = prefixMatch[1];
-        const start = parseInt(prefixMatch[2], 10);
-        const end = parseInt(toMatch[2], 10);
-        const pad = prefixMatch[2].length;
+      const pM = wsFrom.match(/^(.*?)(\d+)$/);
+      const tM = wsTo.match(/^(.*?)(\d+)$/);
+      if (pM && tM && pM[1] === tM[1]) {
+        const prefix = pM[1], start = parseInt(pM[2]), end = parseInt(tM[2]), pad = pM[2].length;
         for (let i = start; i <= end; i++) workspaceNames.push(prefix + String(i).padStart(pad, '0'));
-      } else {
-        workspaceNames.push(wsFrom, wsTo);
-      }
-    } else if (wsFrom) {
-      workspaceNames.push(wsFrom);
-    }
+      } else { workspaceNames.push(wsFrom, wsTo); }
+    } else if (wsFrom) { workspaceNames.push(wsFrom); }
 
     log(`Creating ${workspaceNames.length} workspace(s): ${workspaceNames.join(', ')}`);
     log(`Type: ${wsType}, Country: ${countryLabel}, Bundles: ${bundles.join(', ')}`);
@@ -634,7 +370,6 @@ export async function runCBCWorkspaceCreate({ job, step, users, connection, conn
 
     // Login
     await loginToCBC(page, baseUrl, connUser, connPass);
-    // Zoom out for better viewport coverage
     await page.evaluate(() => { document.body.style.zoom = '0.75'; });
     await page.waitForTimeout(500);
 
@@ -643,39 +378,24 @@ export async function runCBCWorkspaceCreate({ job, step, users, connection, conn
     for (let i = 0; i < workspaceNames.length; i++) {
       const wsName = workspaceNames[i];
       log(`\n═══ Workspace ${i + 1}/${workspaceNames.length}: ${wsName} ═══`);
-
       try {
         await stepCreateWorkspace(page, wsName, wsType, creds);
         await stepAssignDeploymentTarget(page, creds);
         await stepDefineScope(page, country, countryLabel, bundles, ledgerArr, creds);
         results.push({ workspace: wsName, status: 'completed' });
         log(`Workspace "${wsName}" — all steps completed`);
-
-        // Navigate back to Settings → Switch Workspace for next iteration
-        if (i < workspaceNames.length - 1) {
-          log('Navigating back for next workspace...');
-          await page.waitForTimeout(2000);
-          // The Workspaces dialog might reappear, or we need to go back via Settings
-          // stepCreateWorkspace handles both cases (dialog already open or not)
-        }
       } catch (err) {
         log(`Workspace "${wsName}" FAILED: ${err.message}`);
         results.push({ workspace: wsName, status: 'failed', error: err.message });
         await screenshot(page, `cbc-workspace-${wsName}-error`);
-        // Continue to next workspace — don't abort the entire job
       }
     }
 
     await screenshot(page, 'cbc-final');
-    const flushLog = async () => {
-      try { await updateStep(step.id, { detail: JSON.stringify({ debug_log: debugLog, results }) }); } catch {}
-    };
-    await flushLog();
-
+    try { await updateStep(step.id, { detail: JSON.stringify({ debug_log: debugLog, results }) }); } catch {}
     const ok = results.filter(r => r.status === 'completed').length;
     const fail = results.filter(r => r.status === 'failed').length;
     log(`\n═══ Summary: ${ok} completed, ${fail} failed ═══`);
-
     return { workspaces: results, total: workspaceNames.length, completed: ok, failed: fail };
   } catch (err) {
     await screenshot(page, 'cbc-fatal-error');
