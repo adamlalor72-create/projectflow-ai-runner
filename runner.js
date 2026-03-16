@@ -3,7 +3,7 @@
 // Polls BTP for queued provisioning jobs and executes them via Playwright
 
 import config from './config.js';
-import { fetchQueuedJobs, fetchJobDetail, updateJob, updateStep } from './lib/api.js';
+import { fetchQueuedJobs, fetchJobDetail, updateJob, updateStep, updateProjectUser } from './lib/api.js';
 import { closeBrowser } from './lib/browser.js';
 import { runS4WorkerUpload } from './scripts/s4-worker-upload.js';
 import { runS4RoleAssignment } from './scripts/s4-role-assignment.js';
@@ -108,6 +108,20 @@ async function executeJob(jobId) {
         completed_at: new Date().toISOString(),
         detail: JSON.stringify(result || {}),
       });
+
+      // Persist provisioning status on each user record
+      const provFlag = step.step_type === "s4_worker_upload" ? "prov_s4_worker"
+        : step.step_type === "s4_role_upload" ? "prov_s4_roles"
+        : step.step_type === "ias_create" ? "prov_ias" : null;
+      if (provFlag) {
+        for (const u of users) {
+          await updateProjectUser(u.id, { [provFlag]: true }).catch(e =>
+            console.warn(`[Runner] Failed to set ${provFlag} on user ${u.id}: ${e.message}`)
+          );
+        }
+        console.log(`[Runner] Set ${provFlag}=true on ${users.length} user(s)`);
+      }
+
       console.log(`[Runner] Step ${step.step_order} completed.`);
     } catch (err) {
       console.error(`[Runner] Step ${step.step_order} failed:`, err.message);
