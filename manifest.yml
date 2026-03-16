@@ -1,0 +1,16 @@
+---
+applications:
+  - name: dealflow-ai-runner
+    path: .
+    memory: 512M
+    disk_quota: 1G
+    instances: 1
+    no-route: true
+    health-check-type: process
+    command: bash start-cf.sh
+    buildpacks:
+      - nodejs_buildpack
+    env:
+      CF_RUNNER: "true"
+      HEADLESS: "true"
+      DEALFLOW_RUNNER_KEY: "2fa0bbe5f1c820668e7a6d25e09d3d05ec1ffd82685764a6cfd3d2b57abddee0"
