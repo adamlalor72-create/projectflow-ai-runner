@@ -140,23 +140,33 @@ async function loginToCBC(page, baseUrl, username, password) {
 async function stepCreateWorkspace(page, wsName, wsType, creds) {
   console.log(`[CBC] ── Creating workspace: ${wsName} (${wsType}) ──`);
 
-  // 1. Click Settings in sidebar
-  await withAIFallback(page, async () => {
-    // Try sidebar navigation item
-    const clicked = await cbcClick(page, 'ui5-side-navigation-item[text="Settings"]', 'Settings sidebar') ||
-      await cbcClickText(page, 'Settings', 'ui5-side-navigation-item');
-    if (!clicked) throw new Error('Settings not found in sidebar');
-  }, 'Click "Settings" in the bottom-left sidebar navigation.', { credentials: creds });
-  await page.waitForTimeout(1500);
+  // Check if Workspaces dialog is already open (CBC may show it on load or after previous workspace)
+  const wsDialogAlreadyOpen = await page.locator('ui5-dialog[header-text="Workspaces"][open], ui5-dialog[data-help-id="switch-project-dialog"][open]').first()
+    .isVisible({ timeout: 2000 }).catch(() => false);
 
-  // 2. Click Switch Workspace
-  await withAIFallback(page, async () => {
-    const clicked = await cbcClickText(page, 'Switch Workspace', 'ui5-button') ||
-      await cbcClick(page, '[data-action-name="switchWorkspace"]', 'Switch Workspace');
-    if (!clicked) throw new Error('Switch Workspace not found');
-  }, 'Click the "Switch Workspace" button on the Settings page.', { credentials: creds });
-  await page.waitForTimeout(2000);
-  await dismissDialogs(page);
+  if (wsDialogAlreadyOpen) {
+    console.log('[CBC] Workspaces dialog already open — skipping Settings/Switch Workspace');
+  } else {
+    // Close any other blocking dialogs first
+    await dismissDialogs(page);
+    await page.waitForTimeout(500);
+
+    // 1. Click Settings in sidebar
+    await withAIFallback(page, async () => {
+      const clicked = await cbcClick(page, 'ui5-side-navigation-item[text="Settings"]', 'Settings sidebar') ||
+        await cbcClickText(page, 'Settings', 'ui5-side-navigation-item');
+      if (!clicked) throw new Error('Settings not found in sidebar');
+    }, 'Click "Settings" in the bottom-left sidebar navigation.', { credentials: creds });
+    await page.waitForTimeout(1500);
+
+    // 2. Click Switch Workspace
+    await withAIFallback(page, async () => {
+      const clicked = await cbcClickText(page, 'Switch Workspace', 'ui5-button') ||
+        await cbcClick(page, '[data-action-name="switchWorkspace"]', 'Switch Workspace');
+      if (!clicked) throw new Error('Switch Workspace not found');
+    }, 'Click the "Switch Workspace" button on the Settings page.', { credentials: creds });
+    await page.waitForTimeout(2000);
+  }
 
   // 3. Click Create New in the workspaces dialog
   await withAIFallback(page, async () => {
@@ -498,6 +508,14 @@ export async function runCBCWorkspaceCreate({ job, step, users, connection, conn
         await stepDefineScope(page, country, countryLabel, bundles, ledgerArr, creds);
         results.push({ workspace: wsName, status: 'completed' });
         log(`Workspace "${wsName}" — all steps completed`);
+
+        // Navigate back to Settings → Switch Workspace for next iteration
+        if (i < workspaceNames.length - 1) {
+          log('Navigating back for next workspace...');
+          await page.waitForTimeout(2000);
+          // The Workspaces dialog might reappear, or we need to go back via Settings
+          // stepCreateWorkspace handles both cases (dialog already open or not)
+        }
       } catch (err) {
         log(`Workspace "${wsName}" FAILED: ${err.message}`);
         results.push({ workspace: wsName, status: 'failed', error: err.message });
