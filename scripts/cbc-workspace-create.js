@@ -240,9 +240,34 @@ async function stepAssignDeploymentTarget(page, creds) {
 async function stepDefineScope(page, countryCode, countryLabel, bundles, ledgerScenarios, creds) {
   console.log(`[CBC] ── Defining Scope (${countryLabel}) ──`);
 
-  // Click Open — from recording: getByRole('button', { name: 'Open' })
-  await page.getByRole('button', { name: 'Open' }).click({ timeout: 10000 });
-  console.log('[CBC] Clicked Open on Define Scope');
+  // Click Open — wait for loading cards to finish, then click
+  // The activities card has a loading state that intercepts pointer events
+  await page.waitForTimeout(3000);
+  // Wait for loading cards to finish
+  for (let i = 0; i < 10; i++) {
+    const loading = await page.evaluate(() => !!document.querySelector('ui5-card[loading]')).catch(() => false);
+    if (!loading) break;
+    console.log(`[CBC] Waiting for cards to finish loading (${i + 1}/10)...`);
+    await page.waitForTimeout(2000);
+  }
+  await withAIFallback(page, async () => {
+    // Try role-based click first
+    try {
+      await page.getByRole('button', { name: 'Open' }).click({ timeout: 5000 });
+      console.log('[CBC] Clicked Open on Define Scope');
+      return;
+    } catch {}
+    // Fallback: evaluate to bypass loading card overlay
+    const clicked = await page.evaluate(() => {
+      const btns = document.querySelectorAll('ui5-button, button');
+      for (const btn of btns) {
+        if ((btn.textContent || '').trim() === 'Open') { btn.click(); return true; }
+      }
+      return false;
+    });
+    if (!clicked) throw new Error('Open button not found');
+    console.log('[CBC] Clicked Open via evaluate');
+  }, 'Click the "Open" button on the "Define Scope" row.', { credentials: creds });
   await page.waitForTimeout(3000);
   await dismissDialogs(page);
 
