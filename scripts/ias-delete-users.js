@@ -31,7 +31,32 @@ export async function runIasDeleteUsers({ job, step, users, connection }) {
 
   const authHeader = buildAuthHeader(clientId, clientSecret);
 
-  console.log(`[IAS-DEL] Starting SCIM deletion for ${users.length} user(s)`);
+  // Read user_configs from job config for per-user run_ias flags
+  let userConfigs = [];
+  try {
+    const cfg = typeof job.config === "string" ? JSON.parse(job.config) : (job.config || {});
+    userConfigs = (cfg.user_configs || []).filter(uc => uc.run_ias !== false);
+  } catch {}
+
+  // Build target list: merge DB users with config (config has worker_id + ias_user_id for not-found users)
+  const targetUsers = userConfigs.length > 0
+    ? userConfigs.map(uc => {
+        const dbUser = users.find(u => u.id === uc.user_id);
+        return {
+          worker_id: uc.worker_id,
+          ias_user_id: uc.ias_user_id || dbUser?.ias_user_id || null,
+          email: dbUser?.email || "",
+          ...(dbUser ? { id: dbUser.id } : {}),
+        };
+      })
+    : users;
+
+  if (targetUsers.length === 0) {
+    console.log("[IAS-DEL] No users with IAS delete enabled, skipping.");
+    return { total_users: 0, deleted: 0, skipped: 0, failed: 0, results: [], timestamp: new Date().toISOString() };
+  }
+
+  console.log(`[IAS-DEL] Starting SCIM deletion for ${targetUsers.length} user(s)`);
   console.log(`[IAS-DEL] Tenant: ${baseUrl}`);
 
   // Verify connectivity
@@ -46,9 +71,9 @@ export async function runIasDeleteUsers({ job, step, users, connection }) {
   const results = [];
   let deleted = 0, skipped = 0, failed = 0;
 
-  for (let i = 0; i < users.length; i++) {
-    const u = users[i];
-    const label = `${i + 1}/${users.length}`;
+  for (let i = 0; i < targetUsers.length; i++) {
+    const u = targetUsers[i];
+    const label = `${i + 1}/${targetUsers.length}`;
     const scimId = u.ias_user_id;
 
     if (!scimId) {
@@ -87,7 +112,7 @@ export async function runIasDeleteUsers({ job, step, users, connection }) {
   }
 
   return {
-    total_users: users.length, deleted, skipped, failed,
+    total_users: targetUsers.length, deleted, skipped, failed,
     api_driven: true, results,
     timestamp: new Date().toISOString(),
   };

@@ -304,6 +304,26 @@ export async function runS4UserClear({ job, step, users, connection }) {
   const connPass = connection.password || "";
   const creds = { username: connUser, password: connPass };
 
+  // Read user_configs from job config — these have per-user worker_id + run_s4/run_ias flags
+  let userConfigs = [];
+  try {
+    const cfg = typeof job.config === "string" ? JSON.parse(job.config) : (job.config || {});
+    userConfigs = (cfg.user_configs || []).filter(uc => uc.run_s4 !== false);
+  } catch {}
+
+  // Fall back to users array if no user_configs (backwards compat)
+  const targetUsers = userConfigs.length > 0
+    ? userConfigs.map(uc => {
+        const dbUser = users.find(u => u.id === uc.user_id);
+        return { worker_id: uc.worker_id, ...(dbUser || {}) };
+      })
+    : users;
+
+  if (targetUsers.length === 0) {
+    console.log("[S4-Clear] No users with S4 clear enabled, skipping.");
+    return { total_users: 0, cleared: 0, skipped: 0, failed: 0, results: [], timestamp: new Date().toISOString() };
+  }
+
   try {
     const baseUrl = connection.system_url.replace(/\/$/, "");
 
@@ -321,9 +341,9 @@ export async function runS4UserClear({ job, step, users, connection }) {
     const results = [];
     let cleared = 0, failed = 0, skipped = 0;
 
-    for (let i = 0; i < users.length; i++) {
-      const u = users[i];
-      const label = `${i + 1}/${users.length}`;
+    for (let i = 0; i < targetUsers.length; i++) {
+      const u = targetUsers[i];
+      const label = `${i + 1}/${targetUsers.length}`;
       const wid = u.worker_id;
 
       if (!wid) {
@@ -369,7 +389,7 @@ export async function runS4UserClear({ job, step, users, connection }) {
         await screenshot(page, `s4-clear-saved-${wid}`);
 
         // Navigate back to list for next user
-        if (i < users.length - 1) {
+        if (i < targetUsers.length - 1) {
           await navigateBack(page, creds);
         }
 
@@ -401,7 +421,7 @@ export async function runS4UserClear({ job, step, users, connection }) {
     }
 
     return {
-      total_users: users.length, cleared, skipped, failed,
+      total_users: targetUsers.length, cleared, skipped, failed,
       results, timestamp: new Date().toISOString(),
     };
 
