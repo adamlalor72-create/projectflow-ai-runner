@@ -136,43 +136,34 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
   }
   console.log(`[S4-Clear] [MBU] Lock state: ${alreadyLocked ? "LOCKED" : "UNLOCKED"}`);
 
-  if (alreadyLocked) {
-    console.log(`[S4-Clear] [MBU] Already locked — skipping role removal`);
-  } else {
-    // Remove all business roles (must be unlocked to edit)
-    console.log(`[S4-Clear] [MBU] Removing business roles...`);
-    const selectAllCb = page.getByRole('checkbox', { name: 'Select All' });
-    try {
-      await selectAllCb.waitFor({ state: 'visible', timeout: 3000 });
-      await selectAllCb.click();
-      await page.waitForTimeout(500);
-      const removeBtn = page.getByRole('button', { name: 'Remove' });
-      await removeBtn.click();
-      await page.waitForTimeout(1000);
-      console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
-    } catch {
-      console.log(`[S4-Clear] [MBU]   No roles to remove (or Select All not found)`);
-    }
+  // Always try to remove roles regardless of lock state
+  console.log(`[S4-Clear] [MBU] Removing business roles...`);
+  const selectAllCb = page.getByRole('checkbox', { name: 'Select All' });
+  try {
+    await selectAllCb.waitFor({ state: 'visible', timeout: 3000 });
+    await selectAllCb.click();
+    await page.waitForTimeout(500);
+    const removeBtn = page.getByRole('button', { name: 'Remove' });
+    await removeBtn.click();
+    await page.waitForTimeout(1000);
+    console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
+  } catch {
+    console.log(`[S4-Clear] [MBU]   No roles to remove (or Select All not found)`);
+  }
 
-    // Save after role removal
-    console.log(`[S4-Clear] [MBU] Saving (roles removed)...`);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForTimeout(2000);
-    await waitForUI5Ready(page, 10000);
-    await verifyNoErrors(page, "mbu-save-roles", creds);
-
-    // Now lock the user
+  // Lock the user if not already locked
+  if (!alreadyLocked) {
     console.log(`[S4-Clear] [MBU] Locking user...`);
     await lockedCheckbox.click();
     await page.waitForTimeout(500);
-
-    // Save after locking
-    console.log(`[S4-Clear] [MBU] Saving (locked)...`);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForTimeout(2000);
-    await waitForUI5Ready(page, 10000);
-    await verifyNoErrors(page, "mbu-save-lock", creds);
   }
+
+  // Save
+  console.log(`[S4-Clear] [MBU] Saving...`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await page.waitForTimeout(2000);
+  await waitForUI5Ready(page, 10000);
+  await verifyNoErrors(page, "mbu-save", creds);
 
   await screenshot(page, `s4-clear-mbu-done-${workerId}`);
   console.log(`[S4-Clear] [MBU] ✓ Done`);
