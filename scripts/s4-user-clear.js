@@ -51,12 +51,26 @@ async function mwSearchUser(page, workerId, creds) {
 async function mwClickUser(page, workerId, creds) {
   console.log(`[S4-Clear] [MW] Opening ${workerId}...`);
   await withAIFallback(page, async () => {
-    const btn = page.locator(`button:has-text("${workerId}")`).first();
-    if (await btn.isVisible({ timeout: 3000 })) {
-      await btn.click();
+    // Worker IDs are in buttons inside gridcells in the Manage Workforce table
+    // Try gridcell button first, then generic button, then text match
+    const gridBtn = page.locator('[role="gridcell"] button, [role="gridcell"] [role="button"]').filter({ hasText: workerId }).first();
+    if (await gridBtn.isVisible({ timeout: 3000 })) {
+      await gridBtn.click();
       return;
     }
-    throw new Error(`Worker ID button not found for ${workerId}`);
+    // Fallback: any clickable element containing the worker ID
+    const anyBtn = page.locator(`button:has-text("${workerId}"), a:has-text("${workerId}")`).first();
+    if (await anyBtn.isVisible({ timeout: 2000 })) {
+      await anyBtn.click();
+      return;
+    }
+    // Last resort: click the row containing the text
+    const row = page.locator('[role="row"]').filter({ hasText: workerId }).first();
+    if (await row.isVisible({ timeout: 2000 })) {
+      await row.click();
+      return;
+    }
+    throw new Error(`Worker ID ${workerId} not found in grid`);
   }, `Click on the worker ID "${workerId}" in the list to open their detail panel.`,
   { credentials: creds });
   await page.waitForTimeout(2000);
@@ -83,63 +97,41 @@ async function mwClearPersonalData(page, workerId, creds) {
   console.log(`[S4-Clear] [MW] Clearing personal data → Last Name: "Cleared", Email: "${dummyEmail}"...`);
 
   await withAIFallback(page, async () => {
-    // Use page.evaluate to find and set UI5 input fields by their label associations
-    const result = await page.evaluate(({ dummyEmail }) => {
-      const core = sap?.ui?.getCore?.();
-      if (!core) return { success: false, reason: "no_sap_core" };
+    // Fiori Elements fields are plain <input> elements with aria-labelledby → label text.
+    // Playwright fill() triggers proper change events that UI5 picks up.
+    const fieldMap = {
+      "Last Name": "Cleared",
+      "First Name": "",
+      "Email": dummyEmail,
+    };
 
-      const results = {};
-      // Strategy: iterate all UI5 elements, find SmartField or Input with matching label
-      for (const id in core.mElements || {}) {
-        const el = core.mElements[id];
-        // Check SmartField / Input getValue/setValue
-        if (typeof el.setValue !== "function" || typeof el.getValue !== "function") continue;
-        const label = el.getTextLabel?.() || el._sLabel || "";
-        const binding = el.getBindingPath?.("value") || "";
-        const domRef = el.getDomRef?.();
-        const ariaLabel = domRef?.getAttribute?.("aria-label") || "";
-        const placeholder = domRef?.getAttribute?.("placeholder") || "";
-        const combined = `${label}|${binding}|${ariaLabel}|${placeholder}`.toLowerCase();
-
-        if (combined.includes("last name") || combined.includes("lastname") || binding.includes("LastName")) {
-          el.setValue("Cleared");
-          el.fireChange?.({ value: "Cleared" });
-          results.lastName = true;
-        } else if (combined.includes("first name") || combined.includes("firstname") || binding.includes("FirstName")) {
-          el.setValue("");
-          el.fireChange?.({ value: "" });
-          results.firstName = true;
-        } else if ((combined.includes("email") || combined.includes("e-mail") || binding.includes("Email")) && !combined.includes("validate")) {
-          el.setValue(dummyEmail);
-          el.fireChange?.({ value: dummyEmail });
-          results.email = true;
+    for (const [label, value] of Object.entries(fieldMap)) {
+      // Find visible input whose aria-labelledby resolves to matching label text
+      const filled = await page.evaluate(({ label }) => {
+        const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+        for (const inp of inputs) {
+          if (inp.offsetParent === null) continue;
+          const labelledBy = inp.getAttribute("aria-labelledby") || "";
+          if (!labelledBy) continue;
+          const labelEl = document.getElementById(labelledBy.split(" ")[0]);
+          const labelText = labelEl?.textContent?.trim() || "";
+          if (labelText === label) {
+            return inp.id || null;
+          }
         }
-      }
-      return { success: !!(results.lastName || results.email), ...results };
-    }, { dummyEmail });
+        return null;
+      }, { label });
 
-    if (result?.success) {
-      console.log(`[S4-Clear] [MW] Fields cleared via UI5:`, result);
-      return;
-    }
-
-    // Fallback: try finding inputs by visible label text proximity
-    const inputs = await page.$$('input[type="text"], input:not([type])');
-    for (const input of inputs) {
-      if (!(await input.isVisible().catch(() => false))) continue;
-      // Check preceding label
-      const parent = await input.evaluateHandle(el => el.closest('[class*="Field"], [class*="form"]'));
-      const text = await parent.evaluate(el => el?.textContent || "").catch(() => "");
-      const val = await input.inputValue().catch(() => "");
-      if (text.toLowerCase().includes("last name")) {
-        await input.fill("Cleared");
-        await input.dispatchEvent("change");
-      } else if (text.toLowerCase().includes("first name")) {
-        await input.fill("");
-        await input.dispatchEvent("change");
-      } else if (text.toLowerCase().includes("email") || text.toLowerCase().includes("e-mail")) {
-        await input.fill(dummyEmail);
-        await input.dispatchEvent("change");
+      if (filled) {
+        const input = page.locator(`#${CSS.escape(filled)}`);
+        await input.click();
+        await input.fill(value);
+        // Tab out to trigger field validation/change events
+        await input.press("Tab");
+        await page.waitForTimeout(300);
+        console.log(`[S4-Clear] [MW]   ✓ ${label} → "${value || "(empty)"}"`);
+      } else {
+        console.warn(`[S4-Clear] [MW]   ✗ ${label} input not found`);
       }
     }
   }, `On the Manage Workforce edit page, change the personal details:
