@@ -137,18 +137,24 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
   console.log(`[S4-Clear] [MBU] Lock state: ${alreadyLocked ? "LOCKED" : "UNLOCKED"}`);
 
   // Always try to remove roles regardless of lock state
-  console.log(`[S4-Clear] [MBU] Removing business roles...`);
-  const selectAllCb = page.getByRole('checkbox', { name: 'Select All' });
-  try {
-    await selectAllCb.waitFor({ state: 'visible', timeout: 3000 });
-    await selectAllCb.click();
-    await page.waitForTimeout(500);
-    const removeBtn = page.getByRole('button', { name: 'Remove' });
-    await removeBtn.click();
-    await page.waitForTimeout(1000);
-    console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
-  } catch {
-    console.log(`[S4-Clear] [MBU]   No roles to remove (or Select All not found)`);
+  // First check if there are any roles listed
+  const hasRoles = await page.locator('text=/Assigned Business Roles \\(0\\)/').isVisible({ timeout: 1000 }).catch(() => false);
+  if (hasRoles) {
+    console.log(`[S4-Clear] [MBU]   No roles assigned — skipping removal`);
+  } else {
+    console.log(`[S4-Clear] [MBU] Removing business roles...`);
+    const selectAllCb = page.getByRole('checkbox', { name: 'Select All' });
+    try {
+      await selectAllCb.waitFor({ state: 'visible', timeout: 1500 });
+      await selectAllCb.click();
+      await page.waitForTimeout(500);
+      const removeBtn = page.getByRole('button', { name: 'Remove' });
+      await removeBtn.click();
+      await page.waitForTimeout(1000);
+      console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
+    } catch {
+      console.log(`[S4-Clear] [MBU]   No roles to remove`);
+    }
   }
 
   // Lock the user if not already locked
