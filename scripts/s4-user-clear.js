@@ -138,8 +138,9 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
 
   // Always try to remove roles regardless of lock state
   // First check if there are any roles listed
-  const hasRoles = await page.locator('text=/Assigned Business Roles \\(0\\)/').isVisible({ timeout: 1000 }).catch(() => false);
-  if (hasRoles) {
+  let madeChanges = false;
+  const hasNoRoles = await page.locator('text=/Assigned Business Roles \\(0\\)/').isVisible({ timeout: 1000 }).catch(() => false);
+  if (hasNoRoles) {
     console.log(`[S4-Clear] [MBU]   No roles assigned — skipping removal`);
   } else {
     console.log(`[S4-Clear] [MBU] Removing business roles...`);
@@ -152,6 +153,7 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
       await removeBtn.click();
       await page.waitForTimeout(1000);
       console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
+      madeChanges = true;
     } catch {
       console.log(`[S4-Clear] [MBU]   No roles to remove`);
     }
@@ -162,14 +164,19 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
     console.log(`[S4-Clear] [MBU] Locking user...`);
     await lockedCheckbox.click();
     await page.waitForTimeout(500);
+    madeChanges = true;
   }
 
-  // Save
-  console.log(`[S4-Clear] [MBU] Saving...`);
-  await page.getByRole('button', { name: 'Save' }).click();
-  await page.waitForTimeout(2000);
-  await waitForUI5Ready(page, 10000);
-  await verifyNoErrors(page, "mbu-save", creds);
+  // Only save if we actually changed something
+  if (madeChanges) {
+    console.log(`[S4-Clear] [MBU] Saving...`);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.waitForTimeout(2000);
+    await waitForUI5Ready(page, 10000);
+    await verifyNoErrors(page, "mbu-save", creds);
+  } else {
+    console.log(`[S4-Clear] [MBU] No changes needed — skipping save`);
+  }
 
   await screenshot(page, `s4-clear-mbu-done-${workerId}`);
   console.log(`[S4-Clear] [MBU] ✓ Done`);
