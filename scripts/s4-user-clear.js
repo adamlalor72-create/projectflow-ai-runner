@@ -1,17 +1,23 @@
-// DealFlow AI Runner — S/4 User Clear (Two-App Flow)
-// App 1: Manage Workforce (WorkforcePerson-manage_v2) — clear personal data
-// App 2: Maintain Business Users (BusinessUser-maintain) — check lock, remove roles if unlocked, lock
+// DealFlow AI Runner — S/4 User Clear (Deterministic Two-App Flow)
+// Recorded from Playwright codegen — no Computer Use needed.
 //
-// If user is already locked in Maintain Business Users, skip role removal (can't edit when locked).
+// App 1: Manage Workforce (WorkforcePerson-manage_v2)
+//   → Search by Worker ID → Go → Select row → Navigate → Edit
+//   → Clear First Name, set Last Name="Cleared", clear Full Name, set Email=dummy
+//   → Save
+//
+// App 2: Maintain Business Users (via "Maintain Business User" button on MW detail)
+//   → Check Locked checkbox state
+//   → If unlocked: Select All roles → Remove → Save → Lock → Save
+//   → If already locked: skip
 
 import {
   newPage, loginToSystem, navigateToApp, waitForUI5Ready,
-  clickUI5Button, screenshot
+  screenshot
 } from '../lib/browser.js';
-import { aiResolve, withAIFallback } from '../lib/ai-agent.js';
+import { aiResolve } from '../lib/ai-agent.js';
 
 const MW_APP = "WorkforcePerson-manage_v2";
-const MBU_APP = "BusinessUser-maintain";
 
 async function verifyNoErrors(page, stepLabel, creds) {
   try {
@@ -28,345 +34,148 @@ async function verifyNoErrors(page, stepLabel, creds) {
   } catch {}
 }
 
-// ── Manage Workforce helpers ─────────────────────────────────
+/**
+ * Clear one user in S/4HANA using deterministic Playwright selectors.
+ * Returns after both MW personal data + MBU lock/roles are done.
+ */
+async function clearOneUser(page, workerId, baseUrl, creds) {
+  const dummyEmail = `cleared.${workerId.toLowerCase()}@dummy.com`;
 
-async function mwSearchUser(page, workerId, creds) {
+  // ── Part 1: Manage Workforce — clear personal data ──────────
+  console.log(`[S4-Clear] [MW] Navigating to Manage Workforce...`);
+  await navigateToApp(page, baseUrl, MW_APP);
+  await page.waitForTimeout(2000);
+  await waitForUI5Ready(page, 15000);
+
+  // Search by Worker ID
   console.log(`[S4-Clear] [MW] Searching for ${workerId}...`);
-  await withAIFallback(page, async () => {
-    const searchInput = page.locator('input[type="search"]').first();
-    if (await searchInput.isVisible({ timeout: 3000 })) {
-      await searchInput.click();
-      await searchInput.fill("");
-      await searchInput.fill(workerId);
-      await searchInput.press("Enter");
-      return;
-    }
-    throw new Error("Search input not found");
-  }, `Find the search bar in Manage Workforce and search for worker ID "${workerId}".`,
-  { credentials: creds });
+  const workerIdInput = page.getByRole('textbox', { name: 'Worker ID' });
+  await workerIdInput.click();
+  await workerIdInput.fill(workerId);
+  await workerIdInput.press('Enter');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
   await page.waitForTimeout(2000);
   await waitForUI5Ready(page, 10000);
-}
+  await screenshot(page, `s4-clear-mw-search-${workerId}`);
 
-async function mwClickUser(page, workerId, creds) {
-  console.log(`[S4-Clear] [MW] Opening ${workerId}...`);
-  await withAIFallback(page, async () => {
-    // Worker IDs are in buttons inside gridcells in the Manage Workforce table
-    // Try gridcell button first, then generic button, then text match
-    const gridBtn = page.locator('[role="gridcell"] button, [role="gridcell"] [role="button"]').filter({ hasText: workerId }).first();
-    if (await gridBtn.isVisible({ timeout: 3000 })) {
-      await gridBtn.click();
-      return;
-    }
-    // Fallback: any clickable element containing the worker ID
-    const anyBtn = page.locator(`button:has-text("${workerId}"), a:has-text("${workerId}")`).first();
-    if (await anyBtn.isVisible({ timeout: 2000 })) {
-      await anyBtn.click();
-      return;
-    }
-    // Last resort: click the row containing the text
-    const row = page.locator('[role="row"]').filter({ hasText: workerId }).first();
-    if (await row.isVisible({ timeout: 2000 })) {
-      await row.click();
-      return;
-    }
-    throw new Error(`Worker ID ${workerId} not found in grid`);
-  }, `Click on the worker ID "${workerId}" in the list to open their detail panel.`,
-  { credentials: creds });
+  // Select the row and navigate to detail
+  console.log(`[S4-Clear] [MW] Opening detail for ${workerId}...`);
+  await page.getByRole('radio', { name: 'Item Selection' }).first().click();
+  await page.waitForTimeout(500);
+  await page.getByTitle('Navigation', { exact: true }).first().click();
   await page.waitForTimeout(2000);
   await waitForUI5Ready(page, 10000);
-}
+  await screenshot(page, `s4-clear-mw-detail-${workerId}`);
 
-async function mwClickEdit(page, creds) {
+  // Click Edit
   console.log(`[S4-Clear] [MW] Entering edit mode...`);
-  await withAIFallback(page, async () => {
-    const editBtn = page.locator('button:has-text("Edit")').first();
-    if (await editBtn.isVisible({ timeout: 3000 })) {
-      await editBtn.click();
-      return;
-    }
-    throw new Error("Edit button not found");
-  }, `Click the "Edit" button on the worker detail page to enter edit mode.`,
-  { credentials: creds });
+  await page.getByRole('button', { name: 'Edit' }).click();
   await page.waitForTimeout(1500);
   await waitForUI5Ready(page, 5000);
-}
 
-async function mwClearPersonalData(page, workerId, creds) {
-  const dummyEmail = `cleared.${workerId.toLowerCase()}@dummy.com`;
-  console.log(`[S4-Clear] [MW] Clearing personal data → Last Name: "Cleared", Email: "${dummyEmail}"...`);
+  // Clear personal data fields
+  console.log(`[S4-Clear] [MW] Clearing personal data...`);
 
-  await withAIFallback(page, async () => {
-    // Fiori Elements fields are plain <input> elements with aria-labelledby → label text.
-    // Playwright fill() triggers proper change events that UI5 picks up.
-    const fieldMap = {
-      "Last Name": "Cleared",
-      "First Name": "",
-      "Email": dummyEmail,
-    };
+  // First Name → empty
+  const firstNameInput = page.getByRole('textbox', { name: 'First Name' });
+  await firstNameInput.click();
+  await firstNameInput.fill('');
+  await firstNameInput.press('Tab');
+  await page.waitForTimeout(300);
+  console.log(`[S4-Clear] [MW]   ✓ First Name → (empty)`);
 
-    for (const [label, value] of Object.entries(fieldMap)) {
-      // Find visible input whose aria-labelledby resolves to matching label text
-      const filled = await page.evaluate(({ label }) => {
-        const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
-        for (const inp of inputs) {
-          if (inp.offsetParent === null) continue;
-          const labelledBy = inp.getAttribute("aria-labelledby") || "";
-          if (!labelledBy) continue;
-          const labelEl = document.getElementById(labelledBy.split(" ")[0]);
-          const labelText = labelEl?.textContent?.trim() || "";
-          if (labelText === label) {
-            return inp.id || null;
-          }
-        }
-        return null;
-      }, { label });
+  // Last Name → "Cleared"
+  const lastNameInput = page.getByRole('textbox', { name: 'Last Name' });
+  await lastNameInput.click();
+  await lastNameInput.fill('Cleared');
+  await lastNameInput.press('Tab');
+  await page.waitForTimeout(300);
+  console.log(`[S4-Clear] [MW]   ✓ Last Name → "Cleared"`);
 
-      if (filled) {
-        const input = page.locator(`#${CSS.escape(filled)}`);
-        await input.click();
-        await input.fill(value);
-        // Tab out to trigger field validation/change events
-        await input.press("Tab");
-        await page.waitForTimeout(300);
-        console.log(`[S4-Clear] [MW]   ✓ ${label} → "${value || "(empty)"}"`);
-      } else {
-        console.warn(`[S4-Clear] [MW]   ✗ ${label} input not found`);
-      }
-    }
-  }, `On the Manage Workforce edit page, change the personal details:
-- Clear "First Name" (make it empty)
-- Change "Last Name" to "Cleared"
-- Change "Email" to "${dummyEmail}"
-These fields are in the Personal Information section on the right side.`,
-  { credentials: creds });
+  // Full Name → empty
+  const fullNameInput = page.getByRole('textbox', { name: 'Full Name' });
+  await fullNameInput.click();
+  await fullNameInput.fill('');
+  await fullNameInput.press('Tab');
+  await page.waitForTimeout(300);
+  console.log(`[S4-Clear] [MW]   ✓ Full Name → (empty)`);
 
-  await page.waitForTimeout(1000);
-  await verifyNoErrors(page, "mw-clear-personal", creds);
-}
+  // Email → dummy
+  const emailInput = page.getByRole('textbox', { name: 'Email' });
+  await emailInput.click();
+  await emailInput.fill(dummyEmail);
+  await emailInput.press('Tab');
+  await page.waitForTimeout(300);
+  console.log(`[S4-Clear] [MW]   ✓ Email → "${dummyEmail}"`);
 
-async function mwSave(page, creds) {
+  // Save
   console.log(`[S4-Clear] [MW] Saving...`);
-  await withAIFallback(page, async () => {
-    await clickUI5Button(page, "Save");
-  }, `Click the "Save" button to save the changes.`, { credentials: creds });
-  await page.waitForTimeout(2000);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await page.waitForTimeout(3000);
   await waitForUI5Ready(page, 10000);
   await verifyNoErrors(page, "mw-save", creds);
-}
+  await screenshot(page, `s4-clear-mw-saved-${workerId}`);
+  console.log(`[S4-Clear] [MW] ✓ Personal data cleared`);
 
-// ── Maintain Business Users helpers ──────────────────────────
+  // ── Part 2: Maintain Business Users — lock + remove roles ───
+  // Navigate directly from MW detail page via the button
+  console.log(`[S4-Clear] [MBU] Navigating via Maintain Business User button...`);
+  await page.getByRole('button', { name: 'Maintain Business User' }).click();
+  await page.waitForTimeout(3000);
+  await waitForUI5Ready(page, 15000);
+  await screenshot(page, `s4-clear-mbu-detail-${workerId}`);
 
-async function mbuSearchUser(page, workerId, creds) {
-  console.log(`[S4-Clear] [MBU] Searching for ${workerId}...`);
-  await withAIFallback(page, async () => {
-    // MBU has a search field at the top
-    const searchInputs = await page.$$('input[type="search"], input[type="text"]');
-    for (const input of searchInputs) {
-      if (await input.isVisible().catch(() => false)) {
-        const ph = await input.getAttribute("placeholder").catch(() => "");
-        if (ph?.toLowerCase().includes("search") || ph === "") {
-          await input.click();
-          await input.fill(workerId);
-          await input.press("Enter");
-          console.log(`[S4-Clear] [MBU] Searched for ${workerId}`);
-          return;
-        }
-      }
-    }
-    throw new Error("Search input not found in MBU");
-  }, `Search for user "${workerId}" in the Maintain Business Users search bar.`,
-  { credentials: creds });
-  await page.waitForTimeout(2000);
-  await waitForUI5Ready(page, 10000);
-}
-
-async function mbuClickUser(page, workerId, creds) {
-  console.log(`[S4-Clear] [MBU] Opening user ${workerId}...`);
-  await withAIFallback(page, async () => {
-    // Click on the row containing the worker ID
-    const link = page.locator(`a:has-text("${workerId}"), button:has-text("${workerId}"), td:has-text("${workerId}")`).first();
-    if (await link.isVisible({ timeout: 3000 })) {
-      await link.click();
-      return;
-    }
-    // Try any row text
-    const rows = await page.$$('tr, [role="row"], .sapMLIB');
-    for (const row of rows) {
-      const text = await row.textContent().catch(() => "");
-      if (text.includes(workerId)) {
-        await row.click();
-        return;
-      }
-    }
-    throw new Error(`User ${workerId} not found in MBU list`);
-  }, `Click on user "${workerId}" in the Maintain Business Users list to open their detail.`,
-  { credentials: creds });
-  await page.waitForTimeout(2000);
-  await waitForUI5Ready(page, 10000);
-}
-
-/**
- * Check if the "Locked" checkbox is already checked.
- * Returns true if locked, false if unlocked.
- */
-async function mbuIsLocked(page, creds) {
+  // Check if already locked
+  const lockedCheckbox = page.getByRole('checkbox', { name: 'Locked' });
+  let alreadyLocked = false;
   try {
-    // Look for "Locked" checkbox via UI5
-    const locked = await page.evaluate(() => {
-      const core = sap?.ui?.getCore?.();
-      if (!core) return null;
-      for (const id in core.mElements || {}) {
-        const el = core.mElements[id];
-        const text = (el.getText?.() || el.getLabel?.() || "").toString().toLowerCase();
-        if (text.includes("locked") || text.includes("lock")) {
-          if (typeof el.getSelected === "function") return el.getSelected();
-          if (typeof el.getState === "function") return el.getState() === true;
-        }
-      }
-      return null;
-    });
-    if (locked !== null) {
-      console.log(`[S4-Clear] [MBU] Lock state: ${locked ? "LOCKED" : "UNLOCKED"}`);
-      return locked;
-    }
-    // Fallback: check aria-checked on checkboxes near "Locked" text
-    const cb = page.locator('[role="checkbox"]').filter({ hasText: /Lock/i }).first();
-    if (await cb.isVisible({ timeout: 2000 })) {
-      const checked = await cb.getAttribute("aria-checked");
-      const isLocked = checked === "true";
-      console.log(`[S4-Clear] [MBU] Lock state (aria): ${isLocked ? "LOCKED" : "UNLOCKED"}`);
-      return isLocked;
-    }
-  } catch {}
-  console.warn(`[S4-Clear] [MBU] Could not determine lock state, assuming unlocked`);
-  return false;
-}
+    await lockedCheckbox.waitFor({ state: 'visible', timeout: 5000 });
+    alreadyLocked = await lockedCheckbox.isChecked();
+  } catch {
+    console.warn(`[S4-Clear] [MBU] Could not find Locked checkbox`);
+  }
+  console.log(`[S4-Clear] [MBU] Lock state: ${alreadyLocked ? "LOCKED" : "UNLOCKED"}`);
 
-/**
- * Remove all assigned business roles: select all checkbox → Remove button.
- */
-async function mbuRemoveRoles(page, workerId, creds) {
-  console.log(`[S4-Clear] [MBU] Removing business roles...`);
-
-  await withAIFallback(page, async () => {
-    // Find the "Assigned Business Roles" section
-    // The select-all checkbox is the one in the header row next to "Business Role"
-    const headerCb = page.locator('th [role="checkbox"], thead [role="checkbox"], .sapMCb').filter({ hasText: /Business Role/i }).first();
-
-    // Strategy 1: click the checkbox in the header of the roles table
-    let selectAllClicked = false;
+  if (alreadyLocked) {
+    console.log(`[S4-Clear] [MBU] Already locked — skipping role removal`);
+  } else {
+    // Remove all business roles (must be unlocked to edit)
+    console.log(`[S4-Clear] [MBU] Removing business roles...`);
+    const selectAllCb = page.getByRole('checkbox', { name: 'Select All' });
     try {
-      // Find checkbox that's a sibling/peer of "Business Role" column header
-      const allCbs = await page.$$('[role="checkbox"]');
-      for (const cb of allCbs) {
-        const parent = await cb.evaluateHandle(el => el.closest('tr, thead, .sapMListTblHeader'));
-        const parentText = await parent.evaluate(el => el?.textContent || "").catch(() => "");
-        if (parentText.includes("Business Role")) {
-          const checked = await cb.getAttribute("aria-checked");
-          if (checked !== "true") await cb.click();
-          selectAllClicked = true;
-          console.log(`[S4-Clear] [MBU] Select-all checkbox clicked`);
-          break;
-        }
-      }
-    } catch {}
-
-    if (!selectAllClicked) {
-      // Strategy 2: UI5 registry — find the roles table and selectAll
-      const done = await page.evaluate(() => {
-        const core = sap?.ui?.getCore?.();
-        if (!core) return false;
-        for (const id in core.mElements || {}) {
-          const el = core.mElements[id];
-          const heading = el.getHeaderText?.() || el.getTitle?.() || "";
-          if (heading.toString().includes("Assigned Business Roles") || heading.toString().includes("Business Roles")) {
-            if (typeof el.selectAll === "function") {
-              el.selectAll(true);
-              return true;
-            }
-          }
-        }
-        return false;
-      });
-      if (done) {
-        selectAllClicked = true;
-        console.log(`[S4-Clear] [MBU] Select-all via UI5 registry`);
-      }
+      await selectAllCb.waitFor({ state: 'visible', timeout: 3000 });
+      await selectAllCb.click();
+      await page.waitForTimeout(500);
+      const removeBtn = page.getByRole('button', { name: 'Remove' });
+      await removeBtn.click();
+      await page.waitForTimeout(1000);
+      console.log(`[S4-Clear] [MBU]   ✓ Roles removed`);
+    } catch {
+      console.log(`[S4-Clear] [MBU]   No roles to remove (or Select All not found)`);
     }
 
-    if (!selectAllClicked) {
-      console.log(`[S4-Clear] [MBU] No roles to remove or select-all not found`);
-      return;
-    }
+    // Save after role removal
+    console.log(`[S4-Clear] [MBU] Saving (roles removed)...`);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.waitForTimeout(2000);
+    await waitForUI5Ready(page, 10000);
+    await verifyNoErrors(page, "mbu-save-roles", creds);
 
-    // Click Remove button (it lights up after selecting)
+    // Now lock the user
+    console.log(`[S4-Clear] [MBU] Locking user...`);
+    await lockedCheckbox.click();
     await page.waitForTimeout(500);
-    const removeBtn = page.locator('button:has-text("Remove"), [role="button"]:has-text("Remove")').first();
-    if (await removeBtn.isVisible({ timeout: 3000 })) {
-      const disabled = await removeBtn.getAttribute("aria-disabled");
-      if (disabled !== "true") {
-        await removeBtn.click();
-        console.log(`[S4-Clear] [MBU] Clicked Remove`);
-      } else {
-        console.log(`[S4-Clear] [MBU] Remove button disabled — no roles?`);
-      }
-    }
-  }, `In the "Assigned Business Roles" section, click the checkbox next to "Business Role" header to select all roles, then click the "Remove" button that becomes active.`,
-  { credentials: creds });
 
-  await page.waitForTimeout(1000);
-  await verifyNoErrors(page, "mbu-remove-roles", creds);
-}
+    // Save after locking
+    console.log(`[S4-Clear] [MBU] Saving (locked)...`);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.waitForTimeout(2000);
+    await waitForUI5Ready(page, 10000);
+    await verifyNoErrors(page, "mbu-save-lock", creds);
+  }
 
-/**
- * Tick the "Locked" checkbox.
- */
-async function mbuSetLocked(page, creds) {
-  console.log(`[S4-Clear] [MBU] Setting lock...`);
-  await withAIFallback(page, async () => {
-    // Try UI5 first
-    const done = await page.evaluate(() => {
-      const core = sap?.ui?.getCore?.();
-      if (!core) return false;
-      for (const id in core.mElements || {}) {
-        const el = core.mElements[id];
-        const text = (el.getText?.() || el.getLabel?.() || "").toString().toLowerCase();
-        if (text.includes("locked") || text.includes("lock")) {
-          if (typeof el.setSelected === "function" && !el.getSelected()) {
-            el.setSelected(true);
-            el.fireSelect?.({ selected: true });
-            return true;
-          }
-        }
-      }
-      return false;
-    });
-    if (done) {
-      console.log(`[S4-Clear] [MBU] Locked via UI5`);
-      return;
-    }
-    // Fallback: click the checkbox
-    const cb = page.locator('[role="checkbox"]').filter({ hasText: /Lock/i }).first();
-    if (await cb.isVisible({ timeout: 2000 })) {
-      const checked = await cb.getAttribute("aria-checked");
-      if (checked !== "true") await cb.click();
-      return;
-    }
-    throw new Error("Lock checkbox not found");
-  }, `Find the "Locked" checkbox on the business user detail page and tick it to lock the user.`,
-  { credentials: creds });
-  await page.waitForTimeout(500);
-}
-
-async function mbuSave(page, creds) {
-  console.log(`[S4-Clear] [MBU] Saving...`);
-  await withAIFallback(page, async () => {
-    await clickUI5Button(page, "Save");
-  }, `Click the "Save" button to save changes.`, { credentials: creds });
-  await page.waitForTimeout(2000);
-  await waitForUI5Ready(page, 10000);
-  await verifyNoErrors(page, "mbu-save", creds);
+  await screenshot(page, `s4-clear-mbu-done-${workerId}`);
+  console.log(`[S4-Clear] [MBU] ✓ Done`);
 }
 
 // ── Main ──────────────────────────────────────────────────────
@@ -421,52 +230,10 @@ export async function runS4UserClear({ job, step, users, connection }) {
 
       try {
         console.log(`\n[S4-Clear] [${label}] ═══ Processing ${wid} ═══`);
-
-        // ── Part 1: Manage Workforce — clear personal data ──
-        console.log(`[S4-Clear] [${label}] Part 1: Manage Workforce`);
-        await navigateToApp(page, baseUrl, MW_APP);
-        await page.waitForTimeout(2000);
-        await waitForUI5Ready(page, 10000);
-        await screenshot(page, `s4-clear-mw-list-${wid}`);
-
-        await mwSearchUser(page, wid, creds);
-        await mwClickUser(page, wid, creds);
-        await screenshot(page, `s4-clear-mw-detail-${wid}`);
-        await mwClickEdit(page, creds);
-        await mwClearPersonalData(page, wid, creds);
-        await mwSave(page, creds);
-        await screenshot(page, `s4-clear-mw-saved-${wid}`);
-        console.log(`[S4-Clear] [${label}] ✓ Personal data cleared in MW`);
-
-        // ── Part 2: Maintain Business Users — lock + remove roles ──
-        console.log(`[S4-Clear] [${label}] Part 2: Maintain Business Users`);
-        await navigateToApp(page, baseUrl, MBU_APP);
-        await page.waitForTimeout(2000);
-        await waitForUI5Ready(page, 10000);
-        await screenshot(page, `s4-clear-mbu-list-${wid}`);
-
-        await mbuSearchUser(page, wid, creds);
-        await mbuClickUser(page, wid, creds);
-        await screenshot(page, `s4-clear-mbu-detail-${wid}`);
-
-        // Check lock state
-        const alreadyLocked = await mbuIsLocked(page, creds);
-        if (alreadyLocked) {
-          console.log(`[S4-Clear] [${label}] User already locked — skipping role removal`);
-        } else {
-          // Remove roles first (can only do this while unlocked)
-          await mbuRemoveRoles(page, wid, creds);
-          // Then lock
-          await mbuSetLocked(page, creds);
-          // Save
-          await mbuSave(page, creds);
-          await screenshot(page, `s4-clear-mbu-saved-${wid}`);
-        }
-
+        await clearOneUser(page, wid, baseUrl, creds);
         cleared++;
-        results.push({ worker_id: wid, status: "cleared", locked: alreadyLocked ? "already" : "set" });
-        console.log(`[S4-Clear] [${label}] ✓ User ${wid} fully cleared`);
-
+        results.push({ worker_id: wid, status: "cleared" });
+        console.log(`[S4-Clear] [${label}] ✓ ${wid} fully cleared\n`);
       } catch (err) {
         console.error(`[S4-Clear] [${label}] ✗ Failed ${wid}: ${err.message}`);
         await screenshot(page, `s4-clear-error-${wid}`);
