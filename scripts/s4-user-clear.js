@@ -159,6 +159,21 @@ async function clearOneUser(page, workerId, baseUrl, creds) {
     }
   }
 
+  // Clear User Name field
+  console.log(`[S4-Clear] [MBU] Clearing User Name...`);
+  try {
+    const userNameInput = page.getByRole('textbox', { name: 'User Name' });
+    await userNameInput.waitFor({ state: 'visible', timeout: 3000 });
+    await userNameInput.click();
+    await userNameInput.fill('');
+    await userNameInput.press('Tab');
+    await page.waitForTimeout(300);
+    console.log(`[S4-Clear] [MBU]   ✓ User Name cleared`);
+    madeChanges = true;
+  } catch {
+    console.log(`[S4-Clear] [MBU]   User Name field not editable or not found`);
+  }
+
   // Lock the user if not already locked
   if (!alreadyLocked) {
     console.log(`[S4-Clear] [MBU] Locking user...`);
