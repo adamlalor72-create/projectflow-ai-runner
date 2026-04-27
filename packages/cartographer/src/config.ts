@@ -11,6 +11,8 @@ export interface CartographerConfig {
   cbcBaseUrl: string;
   headless: boolean;
   cfRunner: boolean;
+  apiUrl: string;
+  runnerApiKey: string;
 }
 
 export function loadConfig(): CartographerConfig {
@@ -26,5 +28,9 @@ export function loadConfig(): CartographerConfig {
     cbcBaseUrl: process.env.CBC_BASE_URL ?? "",
     headless: cfRunner ? true : process.env.HEADLESS !== "false",
     cfRunner,
+    apiUrl:
+      process.env.DEALFLOW_API_URL ??
+      "https://dealflow-ai-api.cfapps.eu12-002.hana.ondemand.com",
+    runnerApiKey: process.env.DEALFLOW_RUNNER_KEY ?? "",
   };
 }

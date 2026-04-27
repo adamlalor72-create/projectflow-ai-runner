@@ -2,8 +2,9 @@
 import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config.js";
+import { resolveConfig, type CBCConnection } from "./btp-api.js";
 import { createServices, type ServiceContainer } from "./create-services.js";
-import { launchBrowser, closeBrowser } from "./browser.js";
+import { launchBrowser, closeBrowser, loginToCBC } from "./browser.js";
 import { wrapPage } from "./page-adapter-impl.js";
 
 const USAGE = `Usage: cartographer <command> [args]
@@ -16,20 +17,28 @@ Commands:
   drift    <activity_id>          Check an activity for UI drift
   drift-all                       Check all verified activities for drift
   list                            List all mapped activities
-  describe <activity_id>          Show full details for an activity`;
+  describe <activity_id>          Show full details for an activity
+
+Environment:
+  DEALFLOW_RUNNER_KEY   BTP API key (resolves Anthropic key + CBC connection)
+  ANTHROPIC_API_KEY     Override Anthropic key directly
+  CBC_BASE_URL          Override CBC system URL directly
+  HEADLESS              Set to "false" for visible browser (default: true)`;
 
 async function withBrowser(
   fn: (services: ServiceContainer) => Promise<void>,
 ): Promise<void> {
-  const config = loadConfig();
-  if (!config.anthropicApiKey) {
-    console.error("Error: ANTHROPIC_API_KEY is required");
-    process.exit(1);
-  }
+  const rawConfig = loadConfig();
+  const { config, connection } = await resolveConfig(rawConfig);
 
   mkdirSync(path.dirname(config.dbPath), { recursive: true });
 
   const { browser, context, page } = await launchBrowser(config);
+
+  if (connection) {
+    await loginToCBC(page, connection);
+  }
+
   const pageAdapter = wrapPage(page);
   const services = createServices(config, pageAdapter);
 
@@ -44,7 +53,9 @@ async function withBrowser(
 async function withoutBrowser(
   fn: (services: ServiceContainer) => Promise<void>,
 ): Promise<void> {
-  const config = loadConfig();
+  const rawConfig = loadConfig();
+  const { config } = await resolveConfig(rawConfig);
+
   mkdirSync(path.dirname(config.dbPath), { recursive: true });
   const services = createServices(config);
 
