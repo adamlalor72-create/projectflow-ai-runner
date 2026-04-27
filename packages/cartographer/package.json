@@ -4,7 +4,11 @@
   "description": "CBC Cartographer — maps, verifies, and loads SAP CBC customizing activities",
   "type": "module",
   "private": true,
+  "bin": {
+    "cartographer": "./src/cli.ts"
+  },
   "scripts": {
+    "start": "node --import tsx src/cli.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
