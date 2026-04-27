@@ -1,0 +1,5 @@
+dist/
+node_modules/
+.telemetry/*.db
+.telemetry/*.db-wal
+.telemetry/*.db-shm

@@ -9,8 +9,10 @@ import { runS4WorkerUpload } from './scripts/s4-worker-upload.js';
 import { runS4RoleAssignment } from './scripts/s4-role-assignment.js';
 import { runIasCreateUsers } from './scripts/ias-create-users.js';
 import { runCBCWorkspaceCreate } from './scripts/cbc-workspace-create.js';
+import { runCBCWorkspaceDelete } from './scripts/cbc-workspace-delete.js';
 import { runS4UserClear } from './scripts/s4-user-clear.js';
 import { runIasDeleteUsers } from './scripts/ias-delete-users.js';
+import { pollCartographerJobs } from './scripts/cartographer-job-handler.js';
 
 
 const args = process.argv.slice(2);
@@ -22,6 +24,7 @@ const STEP_HANDLERS = {
   s4_role_upload: runS4RoleAssignment,
   ias_create: runIasCreateUsers,
   cbc_workspace_create: runCBCWorkspaceCreate,
+  cbc_workspace_delete: runCBCWorkspaceDelete,
   s4_user_clear: runS4UserClear,
   ias_delete: runIasDeleteUsers,
 };
@@ -166,7 +169,13 @@ async function executeJob(jobId) {
 async function pollOnce() {
   try {
     const jobs = await fetchQueuedJobs();
-    if (jobs.length === 0) return false;
+    if (jobs.length === 0) {
+      // No provisioning jobs — check for cartographer jobs
+      await pollCartographerJobs().catch(err =>
+        console.error("[Runner] Cartographer poll error:", err.message)
+      );
+      return false;
+    }
 
     console.log(`[Runner] Found ${jobs.length} queued job(s)`);
     for (const job of jobs) {
