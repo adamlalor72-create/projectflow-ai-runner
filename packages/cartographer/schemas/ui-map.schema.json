@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dealflow.ai/cartographer/ui-map.schema.json",
+  "title": "CBC Cartographer UI Map",
+  "description": "Describes the UI structure of an SAP CBC customizing activity for deterministic Playwright execution.",
+  "type": "object",
+  "required": ["activity_id", "name", "version", "verified", "navigation", "fields", "actions"],
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "type": "string",
+      "description": "SAP activity ID (e.g. '102934')"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable activity name"
+    },
+    "scope_item_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Related SAP scope items (e.g. ['2AJ', '1B5'])"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version, incremented on each verified update"
+    },
+    "verified": {
+      "type": "boolean",
+      "description": "Whether this map has passed the Verify loop"
+    },
+    "verified_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO timestamp of last successful verification"
+    },
+    "navigation": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered navigation steps from Fiori launchpad to the activity screen"
+        },
+        "deep_link": {
+          "type": ["string", "null"],
+          "description": "Direct URL hash if available (e.g. '#BusinessConfiguration-configure&/activities/102934')"
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/field"
+      },
+      "description": "All input fields on the activity screen"
+    },
+    "actions": {
+      "type": "object",
+      "required": ["save", "cancel"],
+      "additionalProperties": false,
+      "properties": {
+        "save": { "$ref": "#/$defs/action" },
+        "cancel": { "$ref": "#/$defs/action" }
+      }
+    },
+    "subflows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "trigger", "fields"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "trigger": { "$ref": "#/$defs/selectors" },
+          "fields": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/field" }
+          },
+          "actions": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/action" }
+          }
+        }
+      },
+      "description": "Dialogs or sub-screens triggered from the main activity"
+    },
+    "discovery_trace": {
+      "type": ["object", "null"],
+      "description": "Metadata from the Discovery Agent run that produced this map",
+      "properties": {
+        "agent_version": { "type": "string" },
+        "discovered_at": { "type": "string", "format": "date-time" },
+        "duration_ms": { "type": "integer" },
+        "screenshot_count": { "type": "integer" }
+      }
+    },
+    "test_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["run_id", "passed", "timestamp"],
+        "properties": {
+          "run_id": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "errors": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "duration_ms": { "type": "integer" }
+        }
+      },
+      "description": "Results from Verify loop test runs"
+    },
+    "drift_signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["detected_at", "field_id", "signal_type"],
+        "properties": {
+          "detected_at": { "type": "string", "format": "date-time" },
+          "field_id": { "type": "string" },
+          "signal_type": {
+            "type": "string",
+            "enum": ["selector_miss", "label_change", "new_field", "removed_field", "layout_change"]
+          },
+          "detail": { "type": "string" }
+        }
+      },
+      "description": "UI changes detected by the Drift Monitor"
+    }
+  },
+  "$defs": {
+    "selectors": {
+      "type": "object",
+      "required": ["primary"],
+      "additionalProperties": false,
+      "properties": {
+        "primary": {
+          "type": "string",
+          "description": "Primary CSS/Playwright selector"
+        },
+        "fallback_aria": {
+          "type": ["string", "null"],
+          "description": "ARIA role/label-based selector"
+        },
+        "fallback_text": {
+          "type": ["string", "null"],
+          "description": "Text-content-based selector"
+        },
+        "fallback_coords": {
+          "type": ["object", "null"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          },
+          "required": ["x", "y"],
+          "description": "Last-resort pixel coordinates for Computer Use agent"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "label", "type", "selectors"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for the field"
+        },
+        "label": {
+          "type": "string",
+          "description": "Visible label text"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["text", "number", "date", "dropdown", "checkbox", "radio", "file", "textarea", "table_cell", "custom"],
+          "description": "Input control type"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "selectors": { "$ref": "#/$defs/selectors" },
+        "enumeration": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "label"],
+            "properties": {
+              "value": { "type": "string" },
+              "label": { "type": "string" }
+            }
+          },
+          "description": "Allowed values for dropdowns/radios"
+        },
+        "f4_help": {
+          "type": ["object", "null"],
+          "description": "SAP F4 value help configuration",
+          "properties": {
+            "trigger": { "$ref": "#/$defs/selectors" },
+            "search_field": { "$ref": "#/$defs/selectors" },
+            "result_selector": { "$ref": "#/$defs/selectors" }
+          }
+        },
+        "depends_on": {
+          "type": ["string", "null"],
+          "description": "Field ID this field depends on (e.g. cascading dropdowns)"
+        },
+        "affects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Field IDs affected when this field changes"
+        },
+        "validation": {
+          "type": ["object", "null"],
+          "properties": {
+            "pattern": { "type": "string" },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "message": { "type": "string" }
+          }
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["selectors"],
+      "additionalProperties": false,
+      "properties": {
+        "selectors": { "$ref": "#/$defs/selectors" },
+        "indicators": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "string",
+              "description": "Selector or text that appears on success"
+            },
+            "error": {
+              "type": "string",
+              "description": "Selector or text that appears on error"
+            },
+            "busy": {
+              "type": "string",
+              "description": "Selector for loading/busy state"
+            }
+          }
+        }
+      }
+    }
+  }
+}

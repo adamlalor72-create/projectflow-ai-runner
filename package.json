@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Playwright-based provisioning runner for DealFlow AI",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "start": "node runner.js",
     "poll": "node runner.js --poll",
