@@ -20,7 +20,8 @@ export type JobStatus =
   | "running"
   | "completed"
   | "failed"
-  | "blocked";
+  | "blocked"
+  | "cancelled";
 
 export interface Job {
   id: string;
